@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_size/window_size.dart';
-
 import 'app_theme.dart';
 import 'main_shell.dart';
 import 'settings.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 late final SettingsController settingsController;
 
@@ -33,6 +35,11 @@ Future<void> main() async {
   final prefs = await SharedPreferences.getInstance();
   final service = SettingsService(prefs);
   settingsController = SettingsController(service);
+
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  await initializeDateFormatting('id_ID', null);
 
   runApp(
     SettingsScope(

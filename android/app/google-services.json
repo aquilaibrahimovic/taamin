@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "931738425906",
+    "project_id": "taamin-33650",
+    "storage_bucket": "taamin-33650.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:931738425906:android:a2f0666b31a5c9e084ba2b",
+        "android_client_info": {
+          "package_name": "com.robithenha.taamin"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDmC9mHRDQ6qxHOoo0BZcm3XJkkdyHMX0c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
