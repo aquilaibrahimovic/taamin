@@ -2,13 +2,14 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_size/window_size.dart';
 
 import 'app_theme.dart';
 import 'main_shell.dart';
+import 'settings.dart';
 
-final ThemeController themeController = ThemeController();
-final TextScaleController textScaleController = TextScaleController();
+late final SettingsController settingsController;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,20 +24,20 @@ Future<void> main() async {
   // Portrait-like window on desktop
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
     setWindowTitle('Masjid Raudlatus Sholihin');
-
     const size = Size(420, 800);
     setWindowFrame(Rect.fromLTWH(100, 100, size.width, size.height));
     setWindowMinSize(size);
-    // setWindowMaxSize(size); // optional: lock size
   }
 
+  // ✅ Load stored settings before runApp
+  final prefs = await SharedPreferences.getInstance();
+  final service = SettingsService(prefs);
+  settingsController = SettingsController(service);
+
   runApp(
-    ThemeScope(
-      controller: themeController,
-      child: TextScaleScope(
-        controller: textScaleController,
-        child: const MasjidApp(),
-      ),
+    SettingsScope(
+      controller: settingsController,
+      child: const MasjidApp(),
     ),
   );
 }
@@ -46,18 +47,17 @@ class MasjidApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = ThemeScope.of(context);
-    final textScale = TextScaleScope.of(context);
+    final settings = SettingsScope.of(context);
 
     return AnimatedBuilder(
-      animation: Listenable.merge([theme, textScale]),
+      animation: settings,
       builder: (context, _) {
         return MaterialApp(
           title: 'Masjid Raudlatus Sholihin',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.light(),
           darkTheme: AppTheme.dark(),
-          themeMode: theme.mode,
+          themeMode: settings.themeMode,
           home: const MainShell(),
 
           // ✅ Apply font scaling globally
@@ -65,9 +65,7 @@ class MasjidApp extends StatelessWidget {
             final mq = MediaQuery.of(context);
             return MediaQuery(
               data: mq.copyWith(
-                // Flutter 3.16+ (recommended)
-                textScaler: TextScaler.linear(textScale.scale),
-                // If your Flutter is old and this errors, tell me—I'll give the old API version.
+                textScaler: TextScaler.linear(settings.textScale),
               ),
               child: child ?? const SizedBox.shrink(),
             );

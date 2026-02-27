@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../widgets/common.dart';
 import '../app_theme.dart';
 import '../ui_elements.dart';
+import '../settings.dart';
 
 class AkunPage extends StatelessWidget {
   const AkunPage({super.key});
@@ -75,7 +76,7 @@ class _ThemeModeToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final controller = ThemeScope.of(context);
+    final settings = SettingsScope.of(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -105,8 +106,8 @@ class _ThemeModeToggle extends StatelessWidget {
               icon: Icons.dark_mode_outlined,
             ),
           ],
-          selected: controller.mode,
-          onChanged: controller.setMode,
+          selected: settings.themeMode,
+          onChanged: (mode) => settings.setThemeMode(mode),
         ),
 
         const SizedBox(height: 6),
@@ -126,35 +127,23 @@ class _TextSizeToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final controller = TextScaleScope.of(context);
+    final settings = SettingsScope.of(context);
 
-    final selected =
-    controller.scale >= 1.25 ? FontSizeChoice.besar : FontSizeChoice.sedang;
+    final selected = settings.textScale >= 1.25 ? FontSizeChoice.besar : FontSizeChoice.sedang;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Ukuran huruf',
-          style: Theme.of(context).textTheme.titleSmall,
-        ),
+        Text('Ukuran huruf', style: Theme.of(context).textTheme.titleSmall),
         const SizedBox(height: 10),
         FullWidthSegmentedToggle<FontSizeChoice>(
           segments: const [
-            ToggleSegment(
-              value: FontSizeChoice.sedang,
-              label: 'Sedang',
-              icon: Icons.text_fields,
-            ),
-            ToggleSegment(
-              value: FontSizeChoice.besar,
-              label: 'Besar',
-              icon: Icons.format_size,
-            ),
+            ToggleSegment(value: FontSizeChoice.sedang, label: 'Sedang', icon: Icons.text_fields),
+            ToggleSegment(value: FontSizeChoice.besar, label: 'Besar', icon: Icons.format_size),
           ],
           selected: selected,
           onChanged: (choice) {
-            controller.setScale(choice == FontSizeChoice.sedang ? 1.0 : 1.5);
+            settings.setTextScale(choice == FontSizeChoice.sedang ? 1.0 : 1.5);
           },
         ),
         const SizedBox(height: 6),
