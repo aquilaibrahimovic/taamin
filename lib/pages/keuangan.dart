@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -20,9 +21,11 @@ class KeuanganPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ Use tanggal (timestamp with date+time) as the only ordering source.
+    // This avoids the composite index and matches real input/transaction time.
     final stream = FirebaseFirestore.instance
         .collection('keuangan')
-        .orderBy('tanggal', descending: true)
+        .orderBy('tanggal', descending: false) // oldest -> newest (for saldo calc)
         .snapshots();
 
     return PageScaffold(
@@ -49,89 +52,117 @@ class KeuanganPage extends StatelessWidget {
                 return const Text('Belum ada data transaksi.');
               }
 
-              return SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: DataTable(
-                  columns: const [
-                    DataColumn(label: Text('Keterangan')),
-                    DataColumn(label: Text('Tanggal')),
-                    DataColumn(
-                      label: Align(
-                        alignment: Alignment.centerRight,
-                        child: Text('Masuk'),
+              // Build rows with computed saldoKas (running balance)
+              final computedRows = <_KeuanganRow>[];
+              int saldo = 0;
+
+              for (final doc in docs) {
+                final data = doc.data() as Map<String, dynamic>;
+
+                final keterangan = (data['keterangan'] ?? '').toString();
+
+                final ts = data['tanggal'];
+                final tanggal = (ts is Timestamp)
+                    ? ts.toDate()
+                    : DateTime.tryParse(ts?.toString() ?? '') ?? DateTime(1970);
+
+                final masuk = (data['masuk'] as num?)?.toInt() ?? 0;
+                final keluar = (data['keluar'] as num?)?.toInt() ?? 0;
+
+                final notaUrl = (data['notaUrl'] ?? '').toString();
+
+                saldo = saldo + masuk - keluar;
+
+                computedRows.add(
+                  _KeuanganRow(
+                    keterangan: keterangan,
+                    tanggal: tanggal,
+                    masuk: masuk,
+                    keluar: keluar,
+                    saldoKas: saldo,
+                    notaUrl: notaUrl,
+                  ),
+                );
+              }
+
+              // Keep newest first in the UI (optional).
+              // If you want oldest-first display (input order), remove the .reversed.
+              final rowsForDisplay = computedRows;
+
+              final hController = ScrollController();
+
+              return Scrollbar(
+                controller: hController,
+                thumbVisibility: true,
+                child: SingleChildScrollView(
+                  controller: hController,
+                  scrollDirection: Axis.horizontal,
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  dragStartBehavior: DragStartBehavior.down,
+                  child: DataTable(
+                    columns: const [
+                      DataColumn(label: Text('Keterangan')),
+                      DataColumn(label: Text('Tanggal')),
+                      DataColumn(
+                        label: Align(
+                          alignment: Alignment.centerRight,
+                          child: Text('Masuk'),
+                        ),
+                        numeric: true,
                       ),
-                      numeric: true,
-                    ),
-                    DataColumn(
-                      label: Align(
-                        alignment: Alignment.centerRight,
-                        child: Text('Keluar'),
+                      DataColumn(
+                        label: Align(
+                          alignment: Alignment.centerRight,
+                          child: Text('Keluar'),
+                        ),
+                        numeric: true,
                       ),
-                      numeric: true,
-                    ),
-                    DataColumn(
-                      label: Align(
-                        alignment: Alignment.centerRight,
-                        child: Text('Saldo Kas'),
+                      DataColumn(
+                        label: Align(
+                          alignment: Alignment.centerRight,
+                          child: Text('Saldo Kas'),
+                        ),
+                        numeric: true,
                       ),
-                      numeric: true,
-                    ),
-                    DataColumn(label: Text('Nota')),
-                  ],
-                  rows: docs.map((doc) {
-                    final data = doc.data() as Map<String, dynamic>;
-
-                    final keterangan = (data['keterangan'] ?? '').toString();
-
-                    // Firestore Timestamp -> DateTime
-                    final ts = data['tanggal'];
-                    final tanggal = (ts is Timestamp)
-                        ? ts.toDate()
-                        : DateTime.tryParse(ts?.toString() ?? '') ?? DateTime(1970);
-
-                    // Store numbers as int in Firestore
-                    final masuk = (data['masuk'] as num?) ?? 0;
-                    final keluar = (data['keluar'] as num?) ?? 0;
-                    final saldoKas = (data['saldoKas'] as num?) ?? 0;
-
-                    final notaUrl = (data['notaUrl'] ?? '').toString();
-
-                    return DataRow(
-                      cells: [
-                        DataCell(Text(keterangan)),
-                        DataCell(Text(formatTanggal(tanggal))),
-
-                        // ✅ Right-aligned currency
-                        DataCell(
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: Text(formatRupiah(masuk)),
+                      DataColumn(label: Text('Nota')),
+                    ],
+                    rows: rowsForDisplay.map((r) {
+                      return DataRow(
+                        cells: [
+                          DataCell(Text(r.keterangan)),
+                          DataCell(Text(formatTanggal(r.tanggal))),
+                          DataCell(
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: Text(formatRupiah(r.masuk)),
+                            ),
                           ),
-                        ),
-                        DataCell(
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: Text(formatRupiah(keluar)),
+                          DataCell(
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: Text(formatRupiah(r.keluar)),
+                            ),
                           ),
-                        ),
-                        DataCell(
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: Text(formatRupiah(saldoKas)),
+                          DataCell(
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: Text(formatRupiah(r.saldoKas)),
+                            ),
                           ),
-                        ),
-
-                        DataCell(
-                          TextButton(
-                            onPressed: notaUrl.isNotEmpty ? () {
-                              // TODO later: open notaUrl
-                            } : null, // disabled when empty
-                            child: const Text('Lihat'),
+                          DataCell(
+                            TextButton(
+                              onPressed: r.notaUrl.isNotEmpty
+                                  ? () {
+                                // TODO later: open r.notaUrl
+                              }
+                                  : null,
+                              child: const Text('Lihat'),
+                            ),
                           ),
-                        ),
-                      ],
-                    );
-                  }).toList(),
+                        ],
+                      );
+                    }).toList(),
+                  ),
                 ),
               );
             },
@@ -140,4 +171,22 @@ class KeuanganPage extends StatelessWidget {
       ],
     );
   }
+}
+
+class _KeuanganRow {
+  final String keterangan;
+  final DateTime tanggal;
+  final int masuk;
+  final int keluar;
+  final int saldoKas;
+  final String notaUrl;
+
+  const _KeuanganRow({
+    required this.keterangan,
+    required this.tanggal,
+    required this.masuk,
+    required this.keluar,
+    required this.saldoKas,
+    required this.notaUrl,
+  });
 }
