@@ -222,3 +222,30 @@ class ThemeScope extends InheritedNotifier<ThemeController> {
     return scope!.notifier!;
   }
 }
+
+class TextScaleController extends ChangeNotifier {
+  // 1.0 = normal, 1.5 = besar
+  double _scale = 1.0;
+
+  double get scale => _scale;
+
+  void setScale(double scale) {
+    if (_scale == scale) return;
+    _scale = scale;
+    notifyListeners();
+  }
+}
+
+class TextScaleScope extends InheritedNotifier<TextScaleController> {
+  const TextScaleScope({
+    super.key,
+    required TextScaleController controller,
+    required Widget child,
+  }) : super(notifier: controller, child: child);
+
+  static TextScaleController of(BuildContext context) {
+    final scope = context.dependOnInheritedWidgetOfExactType<TextScaleScope>();
+    assert(scope != null, 'TextScaleScope not found. Wrap your app with TextScaleScope.');
+    return scope!.notifier!;
+  }
+}

@@ -8,6 +8,7 @@ import 'app_theme.dart';
 import 'main_shell.dart';
 
 final ThemeController themeController = ThemeController();
+final TextScaleController textScaleController = TextScaleController();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,7 +33,10 @@ Future<void> main() async {
   runApp(
     ThemeScope(
       controller: themeController,
-      child: const MasjidApp(),
+      child: TextScaleScope(
+        controller: textScaleController,
+        child: const MasjidApp(),
+      ),
     ),
   );
 }
@@ -42,18 +46,32 @@ class MasjidApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final controller = ThemeScope.of(context);
+    final theme = ThemeScope.of(context);
+    final textScale = TextScaleScope.of(context);
 
     return AnimatedBuilder(
-      animation: controller,
+      animation: Listenable.merge([theme, textScale]),
       builder: (context, _) {
         return MaterialApp(
           title: 'Masjid Raudlatus Sholihin',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.light(),
           darkTheme: AppTheme.dark(),
-          themeMode: controller.mode, // ✅ system by default, user can override
+          themeMode: theme.mode,
           home: const MainShell(),
+
+          // ✅ Apply font scaling globally
+          builder: (context, child) {
+            final mq = MediaQuery.of(context);
+            return MediaQuery(
+              data: mq.copyWith(
+                // Flutter 3.16+ (recommended)
+                textScaler: TextScaler.linear(textScale.scale),
+                // If your Flutter is old and this errors, tell me—I'll give the old API version.
+              ),
+              child: child ?? const SizedBox.shrink(),
+            );
+          },
         );
       },
     );

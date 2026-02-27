@@ -33,9 +33,12 @@ class AkunPage extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        const SectionTitle('Tema'),
+        const SectionTitle('Tampilan'),
         InfoCard(
           child: _ThemeModeToggle(),
+        ),
+        InfoCard(
+          child: _TextSizeToggle(),
         ),
         const SizedBox(height: 12),
         const SectionTitle('Pengaturan'),
@@ -117,3 +120,53 @@ class _ThemeModeToggle extends StatelessWidget {
     );
   }
 }
+
+class _TextSizeToggle extends StatelessWidget {
+  const _TextSizeToggle();
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = TextScaleScope.of(context);
+
+    final selected =
+    controller.scale >= 1.25 ? FontSizeChoice.besar : FontSizeChoice.sedang;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Ukuran huruf',
+          style: Theme.of(context).textTheme.titleSmall,
+        ),
+        const SizedBox(height: 10),
+        FullWidthSegmentedToggle<FontSizeChoice>(
+          segments: const [
+            ToggleSegment(
+              value: FontSizeChoice.sedang,
+              label: 'Sedang',
+              icon: Icons.text_fields,
+            ),
+            ToggleSegment(
+              value: FontSizeChoice.besar,
+              label: 'Besar',
+              icon: Icons.format_size,
+            ),
+          ],
+          selected: selected,
+          onChanged: (choice) {
+            controller.setScale(choice == FontSizeChoice.sedang ? 1.0 : 1.5);
+          },
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Sedang = normal, Besar = 1.5x.',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: context.appColors.textColor2,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+enum FontSizeChoice { sedang, besar }
