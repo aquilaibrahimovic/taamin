@@ -288,9 +288,8 @@ class _KeuanganPageState extends State<KeuanganPage> {
           builder: (context, adminSnap) {
             final adminData =
                 adminSnap.data?.data() ?? const <String, dynamic>{};
-            final emails =
-                (adminData['emails'] as Map?)?.cast<String, dynamic>() ??
-                    const <String, dynamic>{};
+            final emails = (adminData['emails'] as Map?)?.cast<String, dynamic>() ??
+                const <String, dynamic>{};
             final isAdmin = user != null && emails[user.email] == true;
 
             return PageScaffold(
@@ -311,9 +310,7 @@ class _KeuanganPageState extends State<KeuanganPage> {
                     }
 
                     final docs = txSnap.data!.docs;
-                    if (docs.isEmpty) {
-                      return const Text('Belum ada data transaksi.');
-                    }
+                    if (docs.isEmpty) return const Text('Belum ada data transaksi.');
 
                     // Parse base rows (chronological)
                     final baseRows = <_BaseRow>[];
@@ -352,13 +349,17 @@ class _KeuanganPageState extends State<KeuanganPage> {
                     rowsChrono.isNotEmpty ? rowsChrono.last.saldoKas : 0;
 
                     // Filter rows for selected month (table only)
-                    final filteredChrono = rowsChrono
-                        .where((r) => _isInSelectedMonth(r.tanggal))
-                        .toList();
+                    final filteredChrono =
+                    rowsChrono.where((r) => _isInSelectedMonth(r.tanggal)).toList();
 
-                    final rows = newestFirst
-                        ? filteredChrono.reversed.toList()
-                        : filteredChrono;
+                    // ✅ Restore Evaluasi Bulanan totals
+                    final totalMasukBulan =
+                    filteredChrono.fold<int>(0, (s, r) => s + r.masuk);
+                    final totalKeluarBulan =
+                    filteredChrono.fold<int>(0, (s, r) => s + r.keluar);
+                    final diffBulan = totalMasukBulan - totalKeluarBulan;
+
+                    final rows = newestFirst ? filteredChrono.reversed.toList() : filteredChrono;
 
                     // Friday aggregations for selected month (computed from ALL rows)
                     final fridayAggs = _computeFridayAggs(
@@ -388,11 +389,9 @@ class _KeuanganPageState extends State<KeuanganPage> {
                         final meta =
                             metaSnap.data?.data() ?? const <String, dynamic>{};
                         final tabungan =
-                            (meta['tabungan'] as num?)?.toInt() ??
-                                _defaultTabungan;
+                            (meta['tabungan'] as num?)?.toInt() ?? _defaultTabungan;
                         final deposito =
-                            (meta['deposito'] as num?)?.toInt() ??
-                                _defaultDeposito;
+                            (meta['deposito'] as num?)?.toInt() ?? _defaultDeposito;
                         final saldoTotal = kasLatest + tabungan + deposito;
 
                         final hController = ScrollController();
@@ -402,9 +401,7 @@ class _KeuanganPageState extends State<KeuanganPage> {
                         final monoNumStyle =
                         Theme.of(context).textTheme.bodyMedium?.copyWith(
                           fontFamily: 'monospace',
-                          fontFeatures: const [
-                            FontFeature.tabularFigures()
-                          ],
+                          fontFeatures: const [FontFeature.tabularFigures()],
                         );
 
                         Color keteranganBg(int i) => (i % 2 == 0)
@@ -426,8 +423,7 @@ class _KeuanganPageState extends State<KeuanganPage> {
                             padding: const EdgeInsets.symmetric(horizontal: 12),
                             alignment: align,
                             decoration: BoxDecoration(
-                              border: Border(
-                                  bottom: BorderSide(color: dividerColor)),
+                              border: Border(bottom: BorderSide(color: dividerColor)),
                             ),
                             child: Text(
                               text,
@@ -516,15 +512,17 @@ class _KeuanganPageState extends State<KeuanganPage> {
                             const SizedBox(height: 16),
                             const SectionTitle('Neraca Bulanan', level: 1),
                             const SizedBox(height: 12),
+
                             MonthSwitcher(
                               selectedMonth: _selectedMonth,
                               onChanged: _setMonth,
                               locale: 'id_ID',
                             ),
+
                             const SizedBox(height: 12),
                             const SectionTitle("Transaksi Per Jum'at", level: 2),
 
-                            // No horizontal scroll table (3 cols, 5 rows)
+                            // No horizontal scroll table (2 cols, 5 rows)
                             InfoCard(
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(innerR),
@@ -535,24 +533,20 @@ class _KeuanganPageState extends State<KeuanganPage> {
                                     Row(
                                       children: [
                                         headerCell("Jum'at",
-                                            w: colJumatIdx,
-                                            align: Alignment.center),
+                                            w: colJumatIdx, align: Alignment.center),
                                         Expanded(
                                           child: Container(
                                             height: rowH,
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 12),
+                                            padding: const EdgeInsets.symmetric(horizontal: 12),
                                             alignment: Alignment.centerLeft,
                                             decoration: BoxDecoration(
                                               border: Border(
-                                                  bottom: BorderSide(
-                                                      color: dividerColor)),
+                                                  bottom: BorderSide(color: dividerColor)),
                                             ),
                                             child: Text(
                                               'Neraca',
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .titleSmall,
+                                              style:
+                                              Theme.of(context).textTheme.titleSmall,
                                               overflow: TextOverflow.ellipsis,
                                             ),
                                           ),
@@ -565,11 +559,9 @@ class _KeuanganPageState extends State<KeuanganPage> {
                                       final agg = fridayAggs[i];
                                       final bg = otherColsBg(i);
 
-                                      final jumatText =
-                                      agg.exists ? '${i + 1}' : '-';
-                                      final masukText = agg.exists
-                                          ? formatRupiah(agg.masuk)
-                                          : '-';
+                                      final jumatText = agg.exists ? '${i + 1}' : '-';
+                                      final masukText =
+                                      agg.exists ? formatRupiah(agg.masuk) : '-';
                                       final keluarText = agg.exists
                                           ? 'Rp. -${NumberFormat.decimalPattern('id_ID').format(agg.keluar)}'
                                           : '-';
@@ -586,17 +578,12 @@ class _KeuanganPageState extends State<KeuanganPage> {
                                           Expanded(
                                             child: Container(
                                               height: rowH,
-                                              padding:
-                                              const EdgeInsets.symmetric(
-                                                  horizontal: 12,
-                                                  vertical: 6),
-                                              decoration:
-                                              BoxDecoration(color: bg),
+                                              padding: const EdgeInsets.symmetric(
+                                                  horizontal: 12, vertical: 6),
+                                              decoration: BoxDecoration(color: bg),
                                               child: Column(
-                                                crossAxisAlignment:
-                                                CrossAxisAlignment.end,
-                                                mainAxisAlignment:
-                                                MainAxisAlignment.center,
+                                                crossAxisAlignment: CrossAxisAlignment.end,
+                                                mainAxisAlignment: MainAxisAlignment.center,
                                                 children: [
                                                   Text(
                                                     masukText,
@@ -605,8 +592,7 @@ class _KeuanganPageState extends State<KeuanganPage> {
                                                         ? monoNumStyle?.copyWith(
                                                         color: c.yesColor)
                                                         : monoNumStyle,
-                                                    overflow:
-                                                    TextOverflow.ellipsis,
+                                                    overflow: TextOverflow.ellipsis,
                                                   ),
                                                   Text(
                                                     keluarText,
@@ -615,8 +601,7 @@ class _KeuanganPageState extends State<KeuanganPage> {
                                                         ? monoNumStyle?.copyWith(
                                                         color: c.noColor)
                                                         : monoNumStyle,
-                                                    overflow:
-                                                    TextOverflow.ellipsis,
+                                                    overflow: TextOverflow.ellipsis,
                                                   ),
                                                 ],
                                               ),
@@ -627,6 +612,74 @@ class _KeuanganPageState extends State<KeuanganPage> {
                                     }),
                                   ],
                                 ),
+                              ),
+                            ),
+
+                            // ✅ RESTORED: Evaluasi Bulanan (donut)
+                            const SizedBox(height: 12),
+                            const SectionTitle('Evaluasi Bulanan', level: 2),
+
+                            InfoCard(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Text(
+                                    'Neraca Bulan ${DateFormat('MMMM y', 'id_ID').format(_selectedMonth)}',
+                                    style: Theme.of(context).textTheme.titleSmall,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Center(
+                                    child: _DonutChart(
+                                      masuk: totalMasukBulan,
+                                      keluar: totalKeluarBulan,
+                                      masukColor: c.yesColor,
+                                      keluarColor: c.noColor,
+                                      centerTextColor: c.textColor2,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 14),
+                                  _LegendRow(
+                                    dotColor: c.yesColor,
+                                    title: 'Pemasukan',
+                                    value: formatRupiah(totalMasukBulan),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  _LegendRow(
+                                    dotColor: c.noColor,
+                                    title: 'Pengeluaran',
+                                    value: formatRupiah(totalKeluarBulan),
+                                  ),
+                                  const SizedBox(height: 14),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          diffBulan >= 0 ? 'Surplus' : 'Defisit',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.copyWith(fontWeight: FontWeight.w700),
+                                        ),
+                                      ),
+                                      Text(
+                                        formatRupiah(diffBulan.abs()),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.copyWith(
+                                          fontFamily: 'monospace',
+                                          fontFeatures: const [
+                                            FontFeature.tabularFigures()
+                                          ],
+                                          color: diffBulan >= 0
+                                              ? c.yesColor
+                                              : c.noColor,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ),
                             ),
 
@@ -669,8 +722,7 @@ class _KeuanganPageState extends State<KeuanganPage> {
                                             controller: hController,
                                             scrollDirection: Axis.horizontal,
                                             physics: const AlwaysScrollableScrollPhysics(),
-                                            dragStartBehavior:
-                                            DragStartBehavior.down,
+                                            dragStartBehavior: DragStartBehavior.down,
                                             child: SizedBox(
                                               width: rightWidth,
                                               child: Column(
@@ -678,8 +730,7 @@ class _KeuanganPageState extends State<KeuanganPage> {
                                                 children: [
                                                   Row(
                                                     children: [
-                                                      headerCell('Tanggal',
-                                                          w: colTanggal),
+                                                      headerCell('Tanggal', w: colTanggal),
                                                       headerCell(
                                                         'Masuk',
                                                         w: colMasuk,
@@ -738,8 +789,7 @@ class _KeuanganPageState extends State<KeuanganPage> {
                                                           width: colNota,
                                                           height: rowH,
                                                           alignment: Alignment.center,
-                                                          decoration:
-                                                          BoxDecoration(color: bg),
+                                                          decoration: BoxDecoration(color: bg),
                                                           child: TextButton(
                                                             onPressed: r.notaUrl.isNotEmpty
                                                                 ? () {
@@ -776,6 +826,201 @@ class _KeuanganPageState extends State<KeuanganPage> {
     );
   }
 }
+
+// ----------------- Donut (Evaluasi Bulanan) -----------------
+
+class _DonutChart extends StatelessWidget {
+  final int masuk;
+  final int keluar;
+  final Color masukColor;
+  final Color keluarColor;
+  final Color centerTextColor; // textColor2
+
+  const _DonutChart({
+    required this.masuk,
+    required this.keluar,
+    required this.masukColor,
+    required this.keluarColor,
+    required this.centerTextColor,
+  });
+
+  static const double _size = 170;
+  static const double _stroke = 18;
+
+  @override
+  Widget build(BuildContext context) {
+    final diff = masuk - keluar;
+
+    final jutaFmt = NumberFormat('0.0', 'id_ID');
+    final absJuta = (diff.abs() / 1000000.0);
+    final jutaText = jutaFmt.format(absJuta);
+
+    final isSurplus = diff >= 0;
+    final diffColor = isSurplus ? masukColor : keluarColor;
+    final chevron = isSurplus ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down;
+
+    return SizedBox(
+      width: _size,
+      height: _size,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          CustomPaint(
+            size: const Size(_size, _size),
+            painter: _DonutPainter(
+              masuk: masuk,
+              keluar: keluar,
+              masukColor: masukColor,
+              keluarColor: keluarColor,
+              stroke: _stroke,
+            ),
+          ),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                jutaText,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: diffColor,
+                  fontFamily: 'monospace',
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(chevron, size: 18, color: diffColor),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Juta',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: centerTextColor,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DonutPainter extends CustomPainter {
+  final int masuk;
+  final int keluar;
+  final Color masukColor;
+  final Color keluarColor;
+  final double stroke;
+
+  _DonutPainter({
+    required this.masuk,
+    required this.keluar,
+    required this.masukColor,
+    required this.keluarColor,
+    required this.stroke,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final total = masuk + keluar;
+
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (size.shortestSide / 2) - stroke / 2;
+
+    final basePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.butt
+      ..color = Colors.white.withAlpha(20);
+
+    // draw faint ring background
+    canvas.drawCircle(center, radius, basePaint);
+
+    if (total <= 0) return;
+
+    final rect = Rect.fromCircle(center: center, radius: radius);
+    final startAngle = -3.1415926535 / 2; // start at top
+
+    final masukSweep = (masuk / total) * (2 * 3.1415926535);
+    final keluarSweep = (keluar / total) * (2 * 3.1415926535);
+
+    final masukPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.butt
+      ..color = masukColor;
+
+    final keluarPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.butt
+      ..color = keluarColor;
+
+    // masuk arc
+    canvas.drawArc(rect, startAngle, masukSweep, false, masukPaint);
+    // keluar arc immediately after
+    canvas.drawArc(rect, startAngle + masukSweep, keluarSweep, false, keluarPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _DonutPainter oldDelegate) {
+    return oldDelegate.masuk != masuk ||
+        oldDelegate.keluar != keluar ||
+        oldDelegate.masukColor != masukColor ||
+        oldDelegate.keluarColor != keluarColor ||
+        oldDelegate.stroke != stroke;
+  }
+}
+
+class _LegendRow extends StatelessWidget {
+  final Color dotColor;
+  final String title;
+  final String value;
+
+  const _LegendRow({
+    required this.dotColor,
+    required this.title,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            color: dotColor,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            title,
+            style: Theme.of(context).textTheme.bodyMedium,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        Text(
+          value,
+          textAlign: TextAlign.right,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            fontFamily: 'monospace',
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ----------------- Table models -----------------
 
 class _BaseRow {
   final String keterangan;
