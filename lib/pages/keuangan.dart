@@ -40,7 +40,7 @@ class KeuanganPage extends StatelessWidget {
     return PageScaffold(
       title: 'Keuangan',
       children: [
-        const SectionTitle('Kas Masjid'),
+        const SectionTitle('Transaksi Harian'),
         InfoCard(
           child: StreamBuilder<QuerySnapshot>(
             stream: stream,
