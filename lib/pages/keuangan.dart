@@ -229,6 +229,7 @@ class _KeuanganPageState extends State<KeuanganPage> {
                               formatRupiah: state.formatRupiah,
                               innerR: innerR,
                               theme: keuTheme,
+                              selectedMonth: state.selectedMonth,
                             ),
                           ],
                         );
