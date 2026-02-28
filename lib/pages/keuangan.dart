@@ -8,6 +8,11 @@ import '../widgets/common.dart';
 class KeuanganPage extends StatelessWidget {
   const KeuanganPage({super.key});
 
+  // ✅ Choose how you want to DISPLAY rows.
+  // false = oldest -> newest (first to last)
+  // true  = newest -> oldest (last to first)
+  static const bool newestFirst = false;
+
   static final _rupiah = NumberFormat.currency(
     locale: 'id_ID',
     symbol: 'Rp. ',
@@ -21,11 +26,11 @@ class KeuanganPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ Use tanggal (timestamp with date+time) as the only ordering source.
-    // This avoids the composite index and matches real input/transaction time.
+    // We fetch ordered by timestamp, then we can display either direction.
+    // (One orderBy only, so no composite index needed.)
     final stream = FirebaseFirestore.instance
         .collection('keuangan')
-        .orderBy('tanggal', descending: false) // oldest -> newest (for saldo calc)
+        .orderBy('tanggal', descending: false) // base order: oldest->newest
         .snapshots();
 
     return PageScaffold(
@@ -47,15 +52,12 @@ class KeuanganPage extends StatelessWidget {
               }
 
               final docs = snapshot.data!.docs;
-
               if (docs.isEmpty) {
                 return const Text('Belum ada data transaksi.');
               }
 
-              // Build rows with computed saldoKas (running balance)
-              final computedRows = <_KeuanganRow>[];
-              int saldo = 0;
-
+              // Step 1: parse documents into rows in base order (oldest->newest)
+              final baseRows = <_KeuanganBaseRow>[];
               for (final doc in docs) {
                 final data = doc.data() as Map<String, dynamic>;
 
@@ -71,23 +73,36 @@ class KeuanganPage extends StatelessWidget {
 
                 final notaUrl = (data['notaUrl'] ?? '').toString();
 
-                saldo = saldo + masuk - keluar;
-
-                computedRows.add(
-                  _KeuanganRow(
+                baseRows.add(
+                  _KeuanganBaseRow(
                     keterangan: keterangan,
                     tanggal: tanggal,
                     masuk: masuk,
                     keluar: keluar,
-                    saldoKas: saldo,
                     notaUrl: notaUrl,
                   ),
                 );
               }
 
-              // Keep newest first in the UI (optional).
-              // If you want oldest-first display (input order), remove the .reversed.
-              final rowsForDisplay = computedRows;
+              // Step 2: choose display order
+              final displayRows = newestFirst ? baseRows.reversed.toList() : baseRows;
+
+              // Step 3: compute saldo from TOP to BOTTOM (display order)
+              final computedRows = <_KeuanganRow>[];
+              int saldo = 0;
+              for (final r in displayRows) {
+                saldo = saldo + r.masuk - r.keluar;
+                computedRows.add(
+                  _KeuanganRow(
+                    keterangan: r.keterangan,
+                    tanggal: r.tanggal,
+                    masuk: r.masuk,
+                    keluar: r.keluar,
+                    saldoKas: saldo,
+                    notaUrl: r.notaUrl,
+                  ),
+                );
+              }
 
               final hController = ScrollController();
 
@@ -126,7 +141,7 @@ class KeuanganPage extends StatelessWidget {
                       ),
                       DataColumn(label: Text('Nota')),
                     ],
-                    rows: rowsForDisplay.map((r) {
+                    rows: computedRows.map((r) {
                       return DataRow(
                         cells: [
                           DataCell(Text(r.keterangan)),
@@ -151,11 +166,7 @@ class KeuanganPage extends StatelessWidget {
                           ),
                           DataCell(
                             TextButton(
-                              onPressed: r.notaUrl.isNotEmpty
-                                  ? () {
-                                // TODO later: open r.notaUrl
-                              }
-                                  : null,
+                              onPressed: r.notaUrl.isNotEmpty ? () {} : null,
                               child: const Text('Lihat'),
                             ),
                           ),
@@ -173,20 +184,31 @@ class KeuanganPage extends StatelessWidget {
   }
 }
 
-class _KeuanganRow {
+class _KeuanganBaseRow {
   final String keterangan;
   final DateTime tanggal;
   final int masuk;
   final int keluar;
-  final int saldoKas;
   final String notaUrl;
 
-  const _KeuanganRow({
+  const _KeuanganBaseRow({
     required this.keterangan,
     required this.tanggal,
     required this.masuk,
     required this.keluar,
-    required this.saldoKas,
     required this.notaUrl,
+  });
+}
+
+class _KeuanganRow extends _KeuanganBaseRow {
+  final int saldoKas;
+
+  const _KeuanganRow({
+    required super.keterangan,
+    required super.tanggal,
+    required super.masuk,
+    required super.keluar,
+    required super.notaUrl,
+    required this.saldoKas,
   });
 }
