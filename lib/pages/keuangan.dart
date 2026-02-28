@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:ui' show FontFeature;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -120,7 +121,17 @@ class KeuanganPage extends StatelessWidget {
                 children: [
                   Text(title, style: Theme.of(context).textTheme.titleSmall),
                   const SizedBox(height: 6),
-                  Text(valueText, style: Theme.of(context).textTheme.titleMedium),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      valueText,
+                      textAlign: TextAlign.right,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontFamily: 'monospace',
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -229,6 +240,10 @@ class KeuanganPage extends StatelessWidget {
                 final hController = ScrollController();
                 final dividerColor = Theme.of(context).dividerColor;
                 final c = context.appColors;
+                final monoNumStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontFamily: 'monospace',
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                );
 
                 Color keteranganBg(int i) => (i % 2 == 0)
                     ? c.accent1a.withAlpha(64)
@@ -336,7 +351,7 @@ class KeuanganPage extends StatelessWidget {
                       context: context,
                       title: 'Saldo',
                       valueText: formatRupiah(saldoTotal),
-                      bgColor: c.accent2a.withAlpha(128),
+                      bgColor: c.accent2a.withAlpha(96),
                     ),
 
                     const SizedBox(height: 16),
@@ -421,26 +436,23 @@ class KeuanganPage extends StatelessWidget {
                                                 w: colMasuk,
                                                 align: Alignment.centerRight,
                                                 bgColor: bg,
-                                                style: Theme.of(context)
-                                                    .textTheme
-                                                    .bodyMedium
-                                                    ?.copyWith(color: c.yesColor),
+                                                style: monoNumStyle?.copyWith(color: c.yesColor),
                                               ),
+
                                               dataCell(
                                                 formatRupiah(r.keluar),
                                                 w: colKeluar,
                                                 align: Alignment.centerRight,
                                                 bgColor: bg,
-                                                style: Theme.of(context)
-                                                    .textTheme
-                                                    .bodyMedium
-                                                    ?.copyWith(color: c.noColor),
+                                                style: monoNumStyle?.copyWith(color: c.noColor),
                                               ),
+
                                               dataCell(
                                                 formatRupiah(r.saldoKas),
                                                 w: colSaldo,
                                                 align: Alignment.centerRight,
                                                 bgColor: bg,
+                                                style: monoNumStyle,
                                               ),
                                               Container(
                                                 width: colNota,
