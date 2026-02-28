@@ -101,28 +101,37 @@ class KeuanganPage extends StatelessWidget {
     required BuildContext context,
     required String title,
     required String valueText,
+    required Color bgColor,
     VoidCallback? onEdit,
   }) {
-    return InfoCard(
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: Theme.of(context).textTheme.titleSmall),
-                const SizedBox(height: 6),
-                Text(valueText, style: Theme.of(context).textTheme.titleMedium),
-              ],
+    return Card(
+      elevation: 0,
+      color: bgColor,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(InfoCard.radius),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(InfoCard.paddingAll),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: Theme.of(context).textTheme.titleSmall),
+                  const SizedBox(height: 6),
+                  Text(valueText, style: Theme.of(context).textTheme.titleMedium),
+                ],
+              ),
             ),
-          ),
-          if (onEdit != null)
-            IconButton(
-              tooltip: 'Ubah $title',
-              onPressed: onEdit,
-              icon: const Icon(Icons.edit_outlined),
-            ),
-        ],
+            if (onEdit != null)
+              IconButton(
+                tooltip: 'Ubah $title',
+                onPressed: onEdit,
+                icon: const Icon(Icons.edit_outlined),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -289,6 +298,7 @@ class KeuanganPage extends StatelessWidget {
                       context: context,
                       title: 'Kas',
                       valueText: formatRupiah(kasLatest),
+                      bgColor: c.accent2a.withAlpha(64),
                     ),
                     const SizedBox(height: 12),
 
@@ -296,6 +306,7 @@ class KeuanganPage extends StatelessWidget {
                       context: context,
                       title: 'Tabungan',
                       valueText: formatRupiah(tabungan),
+                      bgColor: c.accent2a.withAlpha(64),
                       onEdit: () => _editMoneyField(
                         context: context,
                         docRef: metaRef,
@@ -310,6 +321,7 @@ class KeuanganPage extends StatelessWidget {
                       context: context,
                       title: 'Deposito',
                       valueText: formatRupiah(deposito),
+                      bgColor: c.accent2a.withAlpha(64),
                       onEdit: () => _editMoneyField(
                         context: context,
                         docRef: metaRef,
@@ -324,6 +336,7 @@ class KeuanganPage extends StatelessWidget {
                       context: context,
                       title: 'Saldo',
                       valueText: formatRupiah(saldoTotal),
+                      bgColor: c.accent2a.withAlpha(128),
                     ),
 
                     const SizedBox(height: 16),
