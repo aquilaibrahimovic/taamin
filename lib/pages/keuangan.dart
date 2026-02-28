@@ -1,14 +1,22 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:ui' show FontFeature;
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+
 import '../app_theme.dart';
 import '../widgets/common.dart';
+import '../widgets/controls.dart'; // ✅ MonthSwitcher + month/year picker
 
-class KeuanganPage extends StatelessWidget {
+class KeuanganPage extends StatefulWidget {
   const KeuanganPage({super.key});
 
+  @override
+  State<KeuanganPage> createState() => _KeuanganPageState();
+}
+
+class _KeuanganPageState extends State<KeuanganPage> {
   // false = oldest->newest, true = newest->oldest
   static const bool newestFirst = false;
 
@@ -36,6 +44,19 @@ class KeuanganPage extends StatelessWidget {
   static const double colSaldo = 150;
   static const double colNota = 90;
   static const double rowH = 52;
+
+  late DateTime _selectedMonth;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _selectedMonth = DateTime(now.year, now.month);
+  }
+
+  void _setMonth(DateTime m) {
+    setState(() => _selectedMonth = DateTime(m.year, m.month));
+  }
 
   int _parseMoney(String s) {
     final digits = s.replaceAll(RegExp(r'[^0-9]'), '');
@@ -84,17 +105,15 @@ class KeuanganPage extends StatelessWidget {
 
     try {
       await docRef.set({fieldName: result}, SetOptions(merge: true));
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$title berhasil diperbarui')),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$title berhasil diperbarui')),
+      );
     } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal menyimpan: $e')),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal menyimpan: $e')),
+      );
     }
   }
 
@@ -147,12 +166,15 @@ class KeuanganPage extends StatelessWidget {
     );
   }
 
+  bool _isInSelectedMonth(DateTime d) =>
+      d.year == _selectedMonth.year && d.month == _selectedMonth.month;
+
   @override
   Widget build(BuildContext context) {
     final transaksiStream = FirebaseFirestore.instance
         .collection('keuangan')
         .orderBy('tanggal', descending: false)
-        .snapshots(); // existing transaksi source :contentReference[oaicite:3]{index=3}
+        .snapshots();
 
     final metaRef = FirebaseFirestore.instance
         .collection(_metaCollection)
@@ -163,7 +185,6 @@ class KeuanganPage extends StatelessWidget {
       children: [
         const SectionTitle('Aset Masjid'),
 
-        // 1) Stream transaksi untuk menghitung Kas (saldoKas terakhir)
         StreamBuilder<QuerySnapshot>(
           stream: transaksiStream,
           builder: (context, txSnap) {
@@ -204,7 +225,7 @@ class KeuanganPage extends StatelessWidget {
               ));
             }
 
-            // Compute saldo in chronological order FIRST (so Kas always correct)
+            // Compute saldo across ALL transactions first (so Kas and saldoKas stay consistent)
             int saldo = 0;
             final rowsChrono = <_Row>[];
             for (final r in baseRows) {
@@ -212,35 +233,48 @@ class KeuanganPage extends StatelessWidget {
               rowsChrono.add(_Row.fromBase(r, saldoKas: saldo));
             }
 
-            final kasLatest = rowsChrono.isNotEmpty ? rowsChrono.last.saldoKas : 0;
+            final kasLatest =
+            rowsChrono.isNotEmpty ? rowsChrono.last.saldoKas : 0;
 
-            // Display rows (maybe reversed)
-            final rows = newestFirst ? rowsChrono.reversed.toList() : rowsChrono;
+            // Filter rows for selected month (table only)
+            final filteredChrono =
+            rowsChrono.where((r) => _isInSelectedMonth(r.tanggal)).toList();
 
-            // 2) Stream meta doc for Tabungan & Deposito
+            final rows =
+            newestFirst ? filteredChrono.reversed.toList() : filteredChrono;
+
             return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
               stream: metaRef.snapshots(),
               builder: (context, metaSnap) {
-                // If doc doesn't exist yet, initialize defaults once.
-                if (metaSnap.hasData && metaSnap.data != null && !metaSnap.data!.exists) {
+                // Initialize defaults if missing
+                if (metaSnap.hasData &&
+                    metaSnap.data != null &&
+                    !metaSnap.data!.exists) {
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     metaRef.set(
-                      {'tabungan': _defaultTabungan, 'deposito': _defaultDeposito},
+                      {
+                        'tabungan': _defaultTabungan,
+                        'deposito': _defaultDeposito,
+                      },
                       SetOptions(merge: true),
                     );
                   });
                 }
 
                 final meta = metaSnap.data?.data() ?? const <String, dynamic>{};
-                final tabungan = (meta['tabungan'] as num?)?.toInt() ?? _defaultTabungan;
-                final deposito = (meta['deposito'] as num?)?.toInt() ?? _defaultDeposito;
+                final tabungan =
+                    (meta['tabungan'] as num?)?.toInt() ?? _defaultTabungan;
+                final deposito =
+                    (meta['deposito'] as num?)?.toInt() ?? _defaultDeposito;
                 final saldoTotal = kasLatest + tabungan + deposito;
 
-                // --- Table UI (your existing Option B) ---
+                // --- Table UI (Option B) ---
                 final hController = ScrollController();
                 final dividerColor = Theme.of(context).dividerColor;
                 final c = context.appColors;
-                final monoNumStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
+
+                final monoNumStyle =
+                Theme.of(context).textTheme.bodyMedium?.copyWith(
                   fontFamily: 'monospace',
                   fontFeatures: const [FontFeature.tabularFigures()],
                 );
@@ -288,7 +322,6 @@ class KeuanganPage extends StatelessWidget {
                     alignment: align,
                     decoration: BoxDecoration(
                       color: bgColor,
-                      // ✅ no row separator border
                     ),
                     child: Text(
                       text,
@@ -301,14 +334,13 @@ class KeuanganPage extends StatelessWidget {
                 final rightWidth =
                     colTanggal + colMasuk + colKeluar + colSaldo + colNota;
 
-                // ✅ inner radius = card radius - card padding (from InfoCard) :contentReference[oaicite:4]{index=4}
+                // Child corner radius = Card radius - Card padding (InfoCard constants)
                 final double innerR = (InfoCard.radius - InfoCard.paddingAll)
                     .clamp(0.0, InfoCard.radius);
 
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // --- Summary cards ---
                     _moneyCard(
                       context: context,
                       title: 'Kas',
@@ -316,7 +348,6 @@ class KeuanganPage extends StatelessWidget {
                       bgColor: c.accent2a.withAlpha(64),
                     ),
                     const SizedBox(height: 12),
-
                     _moneyCard(
                       context: context,
                       title: 'Tabungan',
@@ -331,7 +362,6 @@ class KeuanganPage extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 12),
-
                     _moneyCard(
                       context: context,
                       title: 'Deposito',
@@ -346,141 +376,156 @@ class KeuanganPage extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 12),
-
                     _moneyCard(
                       context: context,
                       title: 'Saldo',
                       valueText: formatRupiah(saldoTotal),
                       bgColor: c.accent2a.withAlpha(96),
                     ),
-
                     const SizedBox(height: 16),
+
+                    const SectionTitle('Neraca Bulanan'),
+                    const SizedBox(height: 12),
+                    // ✅ Month switcher
+                    MonthSwitcher(
+                      selectedMonth: _selectedMonth,
+                      onChanged: _setMonth,
+                      locale: 'id_ID',
+                    ),
+                    const SizedBox(height: 12),
                     const SectionTitle('Transaksi Harian'),
 
-                    // --- Transactions table card ---
-                    InfoCard(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(innerR),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // LEFT: Frozen "Keterangan"
-                            SizedBox(
-                              width: colKet,
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  headerCell('Keterangan', w: colKet),
-                                  ...List.generate(rows.length, (i) {
-                                    final r = rows[i];
-                                    return dataCell(
-                                      r.keterangan,
-                                      w: colKet,
-                                      bgColor: keteranganBg(i),
-                                    );
-                                  }),
-                                ],
+                    if (rows.isEmpty)
+                      const InfoCard(
+                        child: Text('Tidak ada transaksi pada bulan ini.'),
+                      )
+                    else
+                      InfoCard(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(innerR),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // LEFT: Frozen "Keterangan"
+                              SizedBox(
+                                width: colKet,
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    headerCell('Keterangan', w: colKet),
+                                    ...List.generate(rows.length, (i) {
+                                      final r = rows[i];
+                                      return dataCell(
+                                        r.keterangan,
+                                        w: colKet,
+                                        bgColor: keteranganBg(i),
+                                      );
+                                    }),
+                                  ],
+                                ),
                               ),
-                            ),
 
-                            // RIGHT: Horizontally scrollable columns
-                            Expanded(
-                              child: Scrollbar(
-                                controller: hController,
-                                thumbVisibility: true,
-                                child: SingleChildScrollView(
+                              // RIGHT: Horizontally scrollable columns
+                              Expanded(
+                                child: Scrollbar(
                                   controller: hController,
-                                  scrollDirection: Axis.horizontal,
-                                  physics: const AlwaysScrollableScrollPhysics(),
-                                  dragStartBehavior: DragStartBehavior.down,
-                                  child: SizedBox(
-                                    width: rightWidth,
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            headerCell('Tanggal', w: colTanggal),
-                                            headerCell(
-                                              'Masuk',
-                                              w: colMasuk,
-                                              align: Alignment.centerRight,
-                                            ),
-                                            headerCell(
-                                              'Keluar',
-                                              w: colKeluar,
-                                              align: Alignment.centerRight,
-                                            ),
-                                            headerCell(
-                                              'Saldo Kas',
-                                              w: colSaldo,
-                                              align: Alignment.centerRight,
-                                            ),
-                                            headerCell('Nota', w: colNota),
-                                          ],
-                                        ),
-
-                                        ...List.generate(rows.length, (i) {
-                                          final r = rows[i];
-                                          final bg = otherColsBg(i);
-
-                                          return Row(
+                                  thumbVisibility: true,
+                                  child: SingleChildScrollView(
+                                    controller: hController,
+                                    scrollDirection: Axis.horizontal,
+                                    physics:
+                                    const AlwaysScrollableScrollPhysics(),
+                                    dragStartBehavior: DragStartBehavior.down,
+                                    child: SizedBox(
+                                      width: rightWidth,
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Row(
                                             children: [
-                                              dataCell(
-                                                formatTanggal(r.tanggal),
-                                                w: colTanggal,
-                                                bgColor: bg,
-                                              ),
-                                              dataCell(
-                                                formatRupiah(r.masuk),
+                                              headerCell('Tanggal', w: colTanggal),
+                                              headerCell(
+                                                'Masuk',
                                                 w: colMasuk,
                                                 align: Alignment.centerRight,
-                                                bgColor: bg,
-                                                style: monoNumStyle?.copyWith(color: c.yesColor),
                                               ),
-
-                                              dataCell(
-                                                formatRupiah(r.keluar),
+                                              headerCell(
+                                                'Keluar',
                                                 w: colKeluar,
                                                 align: Alignment.centerRight,
-                                                bgColor: bg,
-                                                style: monoNumStyle?.copyWith(color: c.noColor),
                                               ),
-
-                                              dataCell(
-                                                formatRupiah(r.saldoKas),
+                                              headerCell(
+                                                'Saldo Kas',
                                                 w: colSaldo,
                                                 align: Alignment.centerRight,
-                                                bgColor: bg,
-                                                style: monoNumStyle,
                                               ),
-                                              Container(
-                                                width: colNota,
-                                                height: rowH,
-                                                alignment: Alignment.center,
-                                                decoration: BoxDecoration(color: bg),
-                                                child: TextButton(
-                                                  onPressed: r.notaUrl.isNotEmpty
-                                                      ? () {
-                                                    /* TODO */
-                                                  }
-                                                      : null,
-                                                  child: const Text('Lihat'),
-                                                ),
-                                              ),
+                                              headerCell('Nota', w: colNota),
                                             ],
-                                          );
-                                        }),
-                                      ],
+                                          ),
+                                          ...List.generate(rows.length, (i) {
+                                            final r = rows[i];
+                                            final bg = otherColsBg(i);
+
+                                            return Row(
+                                              children: [
+                                                dataCell(
+                                                  formatTanggal(r.tanggal),
+                                                  w: colTanggal,
+                                                  bgColor: bg,
+                                                ),
+                                                dataCell(
+                                                  formatRupiah(r.masuk),
+                                                  w: colMasuk,
+                                                  align: Alignment.centerRight,
+                                                  bgColor: bg,
+                                                  style: monoNumStyle?.copyWith(
+                                                    color: c.yesColor,
+                                                  ),
+                                                ),
+                                                dataCell(
+                                                  formatRupiah(r.keluar),
+                                                  w: colKeluar,
+                                                  align: Alignment.centerRight,
+                                                  bgColor: bg,
+                                                  style: monoNumStyle?.copyWith(
+                                                    color: c.noColor,
+                                                  ),
+                                                ),
+                                                dataCell(
+                                                  formatRupiah(r.saldoKas),
+                                                  w: colSaldo,
+                                                  align: Alignment.centerRight,
+                                                  bgColor: bg,
+                                                  style: monoNumStyle,
+                                                ),
+                                                Container(
+                                                  width: colNota,
+                                                  height: rowH,
+                                                  alignment: Alignment.center,
+                                                  decoration:
+                                                  BoxDecoration(color: bg),
+                                                  child: TextButton(
+                                                    onPressed: r.notaUrl.isNotEmpty
+                                                        ? () {
+                                                      /* TODO */
+                                                    }
+                                                        : null,
+                                                    child: const Text('Lihat'),
+                                                  ),
+                                                ),
+                                              ],
+                                            );
+                                          }),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
-                    ),
                   ],
                 );
               },
