@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../widgets/common.dart';
+import '../widgets/controls.dart';
 import '../app_theme.dart';
-import '../ui_elements.dart';
 import '../settings.dart';
 
 class AkunPage extends StatelessWidget {

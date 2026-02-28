@@ -46,6 +46,9 @@ class SectionTitle extends StatelessWidget {
 }
 
 class InfoCard extends StatelessWidget {
+  static const double paddingAll = 14.0;
+  static const double radius = 24.0;
+
   final Widget child;
   const InfoCard({super.key, required this.child});
 
@@ -53,8 +56,11 @@ class InfoCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(radius),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(paddingAll),
         child: child,
       ),
     );

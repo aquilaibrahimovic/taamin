@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-
+import '../app_theme.dart';
 import '../widgets/common.dart';
 
 class KeuanganPage extends StatelessWidget {
@@ -54,6 +54,7 @@ class KeuanganPage extends StatelessWidget {
                   child: Center(child: CircularProgressIndicator()),
                 );
               }
+
               final docs = snapshot.data!.docs;
               if (docs.isEmpty) return const Text('Belum ada data transaksi.');
 
@@ -66,8 +67,7 @@ class KeuanganPage extends StatelessWidget {
                 final ts = data['tanggal'];
                 final tanggal = (ts is Timestamp)
                     ? ts.toDate()
-                    : DateTime.tryParse(ts?.toString() ?? '') ??
-                    DateTime(1970);
+                    : DateTime.tryParse(ts?.toString() ?? '') ?? DateTime(1970);
 
                 final masuk = (data['masuk'] as num?)?.toInt() ?? 0;
                 final keluar = (data['keluar'] as num?)?.toInt() ?? 0;
@@ -94,13 +94,24 @@ class KeuanganPage extends StatelessWidget {
                 rows.add(_Row.fromBase(r, saldoKas: saldo));
               }
 
-              final vController = ScrollController();
               final hController = ScrollController();
-
               final dividerColor = Theme.of(context).dividerColor;
+              final c = context.appColors;
 
-              Widget headerCell(String text,
-                  {required double w, Alignment align = Alignment.centerLeft}) {
+              // --- Alternating backgrounds ---
+              Color keteranganBg(int i) => (i % 2 == 0)
+                  ? c.accent1a.withAlpha(64)
+                  : c.accent2a.withAlpha(64);
+
+              Color otherColsBg(int i) => (i % 2 == 0)
+                  ? c.accent1a.withAlpha(32)
+                  : c.accent2a.withAlpha(32);
+
+              Widget headerCell(
+                  String text, {
+                    required double w,
+                    Alignment align = Alignment.centerLeft,
+                  }) {
                 return Container(
                   width: w,
                   height: rowH,
@@ -117,17 +128,21 @@ class KeuanganPage extends StatelessWidget {
                 );
               }
 
-              Widget dataCell(String text,
-                  {required double w,
+              Widget dataCell(
+                  String text, {
+                    required double w,
                     Alignment align = Alignment.centerLeft,
-                    TextStyle? style}) {
+                    TextStyle? style,
+                    Color? bgColor,
+                  }) {
                 return Container(
                   width: w,
                   height: rowH,
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   alignment: align,
                   decoration: BoxDecoration(
-                    border: Border(bottom: BorderSide(color: dividerColor)),
+                    color: bgColor,
+                    // ✅ no row separator border
                   ),
                   child: Text(
                     text,
@@ -137,35 +152,37 @@ class KeuanganPage extends StatelessWidget {
                 );
               }
 
-              return SizedBox(
-                height: 360, // makes vertical scroll happen inside the card
+              final rightWidth = colTanggal + colMasuk + colKeluar + colSaldo + colNota;
+
+              // ✅ inner radius = card radius - card padding (from InfoCard)
+              final double innerR =
+              (InfoCard.radius - InfoCard.paddingAll).clamp(0.0, InfoCard.radius);
+
+              return ClipRRect(
+                borderRadius: BorderRadius.circular(innerR),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ✅ LEFT: Frozen "Keterangan" column (shares vertical scroll)
+                    // ✅ LEFT: Frozen "Keterangan" column (NOT horizontally scrollable)
                     SizedBox(
                       width: colKet,
                       child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           headerCell('Keterangan', w: colKet),
-                          Expanded(
-                            child: ListView.builder(
-                              controller: vController,
-                              itemCount: rows.length,
-                              itemBuilder: (context, i) {
-                                final r = rows[i];
-                                return dataCell(
-                                  r.keterangan,
-                                  w: colKet,
-                                );
-                              },
-                            ),
-                          ),
+                          ...List.generate(rows.length, (i) {
+                            final r = rows[i];
+                            return dataCell(
+                              r.keterangan,
+                              w: colKet,
+                              bgColor: keteranganBg(i),
+                            );
+                          }),
                         ],
                       ),
                     ),
 
-                    // ✅ RIGHT: Scrollable columns (horizontal) + shared vertical scroll
+                    // ✅ RIGHT: Horizontally scrollable columns (NO vertical scrolling)
                     Expanded(
                       child: Scrollbar(
                         controller: hController,
@@ -176,71 +193,82 @@ class KeuanganPage extends StatelessWidget {
                           physics: const AlwaysScrollableScrollPhysics(),
                           dragStartBehavior: DragStartBehavior.down,
                           child: SizedBox(
-                            width: colTanggal +
-                                colMasuk +
-                                colKeluar +
-                                colSaldo +
-                                colNota,
+                            width: rightWidth,
                             child: Column(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
+                                // Header row (scrolls horizontally with the body)
                                 Row(
                                   children: [
                                     headerCell('Tanggal', w: colTanggal),
-                                    headerCell('Masuk',
-                                        w: colMasuk,
-                                        align: Alignment.centerRight),
-                                    headerCell('Keluar',
-                                        w: colKeluar,
-                                        align: Alignment.centerRight),
-                                    headerCell('Saldo Kas',
-                                        w: colSaldo,
-                                        align: Alignment.centerRight),
+                                    headerCell(
+                                      'Masuk',
+                                      w: colMasuk,
+                                      align: Alignment.centerRight,
+                                    ),
+                                    headerCell(
+                                      'Keluar',
+                                      w: colKeluar,
+                                      align: Alignment.centerRight,
+                                    ),
+                                    headerCell(
+                                      'Saldo Kas',
+                                      w: colSaldo,
+                                      align: Alignment.centerRight,
+                                    ),
                                     headerCell('Nota', w: colNota),
                                   ],
                                 ),
-                                Expanded(
-                                  child: ListView.builder(
-                                    controller: vController,
-                                    itemCount: rows.length,
-                                    itemBuilder: (context, i) {
-                                      final r = rows[i];
-                                      return Row(
-                                        children: [
-                                          dataCell(formatTanggal(r.tanggal),
-                                              w: colTanggal),
-                                          dataCell(formatRupiah(r.masuk),
-                                              w: colMasuk,
-                                              align: Alignment.centerRight),
-                                          dataCell(formatRupiah(r.keluar),
-                                              w: colKeluar,
-                                              align: Alignment.centerRight),
-                                          dataCell(formatRupiah(r.saldoKas),
-                                              w: colSaldo,
-                                              align: Alignment.centerRight),
-                                          Container(
-                                            width: colNota,
-                                            height: rowH,
-                                            alignment: Alignment.center,
-                                            decoration: BoxDecoration(
-                                              border: Border(
-                                                bottom: BorderSide(
-                                                    color: dividerColor),
-                                              ),
-                                            ),
-                                            child: TextButton(
-                                              onPressed: r.notaUrl.isNotEmpty
-                                                  ? () {
-                                                // TODO later: open r.notaUrl
-                                              }
-                                                  : null,
-                                              child: const Text('Lihat'),
-                                            ),
-                                          ),
-                                        ],
-                                      );
-                                    },
-                                  ),
-                                ),
+
+                                // Data rows (no vertical scrolling; height grows with row count)
+                                ...List.generate(rows.length, (i) {
+                                  final r = rows[i];
+                                  final bg = otherColsBg(i);
+
+                                  return Row(
+                                    children: [
+                                      dataCell(
+                                        formatTanggal(r.tanggal),
+                                        w: colTanggal,
+                                        bgColor: bg,
+                                      ),
+                                      dataCell(
+                                        formatRupiah(r.masuk),
+                                        w: colMasuk,
+                                        align: Alignment.centerRight,
+                                        bgColor: bg,
+                                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: c.yesColor),
+                                      ),
+                                      dataCell(
+                                        formatRupiah(r.keluar),
+                                        w: colKeluar,
+                                        align: Alignment.centerRight,
+                                        bgColor: bg,
+                                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: c.noColor),
+                                      ),
+                                      dataCell(
+                                        formatRupiah(r.saldoKas),
+                                        w: colSaldo,
+                                        align: Alignment.centerRight,
+                                        bgColor: bg,
+                                      ),
+                                      Container(
+                                        width: colNota,
+                                        height: rowH,
+                                        alignment: Alignment.center,
+                                        decoration: BoxDecoration(color: bg),
+                                        child: TextButton(
+                                          onPressed: r.notaUrl.isNotEmpty
+                                              ? () {
+                                            /* TODO */
+                                          }
+                                              : null,
+                                          child: const Text('Lihat'),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                }),
                               ],
                             ),
                           ),
