@@ -149,6 +149,7 @@ class _DonutChart extends StatelessWidget {
               Text(
                 jutaText,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontSize: (Theme.of(context).textTheme.titleLarge?.fontSize ?? 20) * 2,
                   fontWeight: FontWeight.w800,
                   color: diffColor,
                   fontFamily: 'monospace',
