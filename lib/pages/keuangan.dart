@@ -183,7 +183,7 @@ class _KeuanganPageState extends State<KeuanganPage> {
     return PageScaffold(
       title: 'Keuangan',
       children: [
-        const SectionTitle('Aset Masjid'),
+        const SectionTitle('Aset Masjid', level: 1),
 
         StreamBuilder<QuerySnapshot>(
           stream: transaksiStream,
@@ -384,7 +384,7 @@ class _KeuanganPageState extends State<KeuanganPage> {
                     ),
                     const SizedBox(height: 16),
 
-                    const SectionTitle('Neraca Bulanan'),
+                    const SectionTitle('Neraca Bulanan', level: 1),
                     const SizedBox(height: 12),
                     // ✅ Month switcher
                     MonthSwitcher(
@@ -393,7 +393,7 @@ class _KeuanganPageState extends State<KeuanganPage> {
                       locale: 'id_ID',
                     ),
                     const SizedBox(height: 12),
-                    const SectionTitle('Transaksi Harian'),
+                    const SectionTitle('Transaksi Harian', level: 2),
 
                     if (rows.isEmpty)
                       const InfoCard(
