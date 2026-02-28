@@ -1,5 +1,3 @@
-import 'dart:ui' show FontFeature;
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -7,7 +5,22 @@ import 'package:intl/intl.dart';
 
 import '../app_theme.dart';
 import '../widgets/common.dart';
-import '../widgets/controls.dart'; // ✅ MonthSwitcher + month/year picker
+import '../widgets/controls.dart';
+
+// ---------- Friday rollup model (top-level, not nested) ----------
+class _FridayAgg {
+  final int weekIndex; // 1..5
+  final bool exists; // true if this Friday exists in the month
+  final int masuk;
+  final int keluar;
+
+  const _FridayAgg({
+    required this.weekIndex,
+    required this.exists,
+    required this.masuk,
+    required this.keluar,
+  });
+}
 
 class KeuanganPage extends StatefulWidget {
   const KeuanganPage({super.key});
@@ -45,6 +58,9 @@ class _KeuanganPageState extends State<KeuanganPage> {
   static const double colNota = 90;
   static const double rowH = 52;
 
+  // Friday summary widths (no horizontal scroll)
+  static const double colJumatIdx = 160;
+
   late DateTime _selectedMonth;
 
   @override
@@ -70,6 +86,9 @@ class _KeuanganPageState extends State<KeuanganPage> {
     required String fieldName,
     required int currentValue,
   }) async {
+    // ✅ capture messenger BEFORE the await to avoid context-across-async-gap warning
+    final messenger = ScaffoldMessenger.of(context);
+
     final controller = TextEditingController(text: currentValue.toString());
 
     final result = await showDialog<int>(
@@ -106,12 +125,12 @@ class _KeuanganPageState extends State<KeuanganPage> {
     try {
       await docRef.set({fieldName: result}, SetOptions(merge: true));
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(content: Text('$title berhasil diperbarui')),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(content: Text('Gagal menyimpan: $e')),
       );
     }
@@ -169,6 +188,79 @@ class _KeuanganPageState extends State<KeuanganPage> {
   bool _isInSelectedMonth(DateTime d) =>
       d.year == _selectedMonth.year && d.month == _selectedMonth.month;
 
+  // ---------- Friday rollup helpers ----------
+  int _daysInMonth(int year, int month) {
+    final firstNextMonth =
+    (month == 12) ? DateTime(year + 1, 1, 1) : DateTime(year, month + 1, 1);
+    return firstNextMonth.subtract(const Duration(days: 1)).day;
+  }
+
+  List<DateTime> _fridaysInMonth(int year, int month) {
+    final days = _daysInMonth(year, month);
+    final result = <DateTime>[];
+    for (int d = 1; d <= days; d++) {
+      final dt = DateTime(year, month, d);
+      if (dt.weekday == DateTime.friday) result.add(dt);
+    }
+    return result;
+  }
+
+  DateTime _atTime(DateTime d, int hour, int minute) =>
+      DateTime(d.year, d.month, d.day, hour, minute);
+
+  List<_FridayAgg> _computeFridayAggs({
+    required int year,
+    required int month,
+    required List<_BaseRow> baseRows,
+  }) {
+    final fridays = _fridaysInMonth(year, month);
+    final out = <_FridayAgg>[];
+
+    for (int i = 0; i < 5; i++) {
+      final weekIndex = i + 1;
+
+      if (i >= fridays.length) {
+        // ✅ No such Friday in this month → keep row, but placeholder
+        out.add(
+          const _FridayAgg(weekIndex: 0, exists: false, masuk: 0, keluar: 0),
+        );
+        continue;
+      }
+
+      final currentFriday = fridays[i];
+      final prevFriday = currentFriday.subtract(const Duration(days: 7));
+
+      // Window: prev Fri 12:01 -> current Fri 12:00
+      final start = _atTime(prevFriday, 12, 1);
+      final end = _atTime(currentFriday, 12, 0);
+
+      int totalMasuk = 0;
+      int totalKeluar = 0;
+
+      for (final r in baseRows) {
+        final t = r.tanggal;
+
+        final within =
+            t.isAfter(start) && (t.isBefore(end) || t.isAtSameMomentAs(end));
+        if (!within) continue;
+
+        totalMasuk += r.masuk;
+        totalKeluar += r.keluar;
+      }
+
+      out.add(
+        _FridayAgg(
+          weekIndex: weekIndex,
+          exists: true,
+          masuk: totalMasuk,
+          keluar: totalKeluar,
+        ),
+      );
+    }
+
+    return out;
+  }
+
   @override
   Widget build(BuildContext context) {
     final transaksiStream = FirebaseFirestore.instance
@@ -184,7 +276,6 @@ class _KeuanganPageState extends State<KeuanganPage> {
       title: 'Keuangan',
       children: [
         const SectionTitle('Aset Masjid', level: 1),
-
         StreamBuilder<QuerySnapshot>(
           stream: transaksiStream,
           builder: (context, txSnap) {
@@ -243,6 +334,13 @@ class _KeuanganPageState extends State<KeuanganPage> {
             final rows =
             newestFirst ? filteredChrono.reversed.toList() : filteredChrono;
 
+            // Friday aggregations for selected month (computed from ALL rows)
+            final fridayAggs = _computeFridayAggs(
+              year: _selectedMonth.year,
+              month: _selectedMonth.month,
+              baseRows: baseRows,
+            );
+
             return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
               stream: metaRef.snapshots(),
               builder: (context, metaSnap) {
@@ -268,7 +366,6 @@ class _KeuanganPageState extends State<KeuanganPage> {
                     (meta['deposito'] as num?)?.toInt() ?? _defaultDeposito;
                 final saldoTotal = kasLatest + tabungan + deposito;
 
-                // --- Table UI (Option B) ---
                 final hController = ScrollController();
                 final dividerColor = Theme.of(context).dividerColor;
                 final c = context.appColors;
@@ -320,9 +417,7 @@ class _KeuanganPageState extends State<KeuanganPage> {
                     height: rowH,
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     alignment: align,
-                    decoration: BoxDecoration(
-                      color: bgColor,
-                    ),
+                    decoration: BoxDecoration(color: bgColor),
                     child: Text(
                       text,
                       overflow: TextOverflow.ellipsis,
@@ -334,7 +429,6 @@ class _KeuanganPageState extends State<KeuanganPage> {
                 final rightWidth =
                     colTanggal + colMasuk + colKeluar + colSaldo + colNota;
 
-                // Child corner radius = Card radius - Card padding (InfoCard constants)
                 final double innerR = (InfoCard.radius - InfoCard.paddingAll)
                     .clamp(0.0, InfoCard.radius);
 
@@ -383,15 +477,105 @@ class _KeuanganPageState extends State<KeuanganPage> {
                       bgColor: c.accent2a.withAlpha(96),
                     ),
                     const SizedBox(height: 16),
-
                     const SectionTitle('Neraca Bulanan', level: 1),
                     const SizedBox(height: 12),
-                    // ✅ Month switcher
+
                     MonthSwitcher(
                       selectedMonth: _selectedMonth,
                       onChanged: _setMonth,
                       locale: 'id_ID',
                     ),
+
+                    const SizedBox(height: 12),
+                    const SectionTitle("Transaksi Per Jum'at", level: 2),
+
+                    // No horizontal scroll table (3 cols, 5 rows)
+                    InfoCard(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(innerR),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Header
+                            Row(
+                              children: [
+                                headerCell("Jum'at", w: colJumatIdx, align: Alignment.center),
+                                Expanded(
+                                  child: Container(
+                                    height: rowH,
+                                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                                    alignment: Alignment.centerLeft,
+                                    decoration: BoxDecoration(
+                                      border: Border(bottom: BorderSide(color: dividerColor)),
+                                    ),
+                                    child: Text(
+                                      'Neraca',
+                                      style: Theme.of(context).textTheme.titleSmall,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            // 5 rows
+                            ...List.generate(5, (i) {
+                              final agg = fridayAggs[i];
+                              final bg = otherColsBg(i);
+
+                              final jumatText = agg.exists ? '${i + 1}' : '-';
+                              final masukText = agg.exists ? formatRupiah(agg.masuk) : '-';
+                              final keluarText = agg.exists
+                                  ? 'Rp. -${NumberFormat.decimalPattern('id_ID').format(agg.keluar)}'
+                                  : '-';
+
+                              return Row(
+                                children: [
+                                  dataCell(
+                                    jumatText,
+                                    w: colJumatIdx,
+                                    align: Alignment.center,
+                                    bgColor: bg,
+                                    style: monoNumStyle,
+                                  ),
+                                  Expanded(
+                                    child: Container(
+                                      height: rowH,
+                                      padding:
+                                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                      decoration: BoxDecoration(color: bg),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.end,
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Text(
+                                            masukText,
+                                            textAlign: TextAlign.right,
+                                            style: agg.exists
+                                                ? monoNumStyle?.copyWith(color: c.yesColor)
+                                                : monoNumStyle,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          Text(
+                                            keluarText,
+                                            textAlign: TextAlign.right,
+                                            style: agg.exists
+                                                ? monoNumStyle?.copyWith(color: c.noColor)
+                                                : monoNumStyle,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            }),
+                          ],
+                        ),
+                      ),
+                    ),
+
                     const SizedBox(height: 12),
                     const SectionTitle('Transaksi Harian', level: 2),
 
@@ -406,7 +590,6 @@ class _KeuanganPageState extends State<KeuanganPage> {
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // LEFT: Frozen "Keterangan"
                               SizedBox(
                                 width: colKet,
                                 child: Column(
@@ -424,8 +607,6 @@ class _KeuanganPageState extends State<KeuanganPage> {
                                   ],
                                 ),
                               ),
-
-                              // RIGHT: Horizontally scrollable columns
                               Expanded(
                                 child: Scrollbar(
                                   controller: hController,
@@ -443,7 +624,8 @@ class _KeuanganPageState extends State<KeuanganPage> {
                                         children: [
                                           Row(
                                             children: [
-                                              headerCell('Tanggal', w: colTanggal),
+                                              headerCell('Tanggal',
+                                                  w: colTanggal),
                                               headerCell(
                                                 'Masuk',
                                                 w: colMasuk,
@@ -478,7 +660,8 @@ class _KeuanganPageState extends State<KeuanganPage> {
                                                   w: colMasuk,
                                                   align: Alignment.centerRight,
                                                   bgColor: bg,
-                                                  style: monoNumStyle?.copyWith(
+                                                  style:
+                                                  monoNumStyle?.copyWith(
                                                     color: c.yesColor,
                                                   ),
                                                 ),
@@ -487,7 +670,8 @@ class _KeuanganPageState extends State<KeuanganPage> {
                                                   w: colKeluar,
                                                   align: Alignment.centerRight,
                                                   bgColor: bg,
-                                                  style: monoNumStyle?.copyWith(
+                                                  style:
+                                                  monoNumStyle?.copyWith(
                                                     color: c.noColor,
                                                   ),
                                                 ),
