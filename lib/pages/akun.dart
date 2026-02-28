@@ -1,8 +1,13 @@
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../widgets/common.dart';
 import '../widgets/controls.dart';
 import '../app_theme.dart';
 import '../settings.dart';
+
+final auth = FirebaseAuth.instance;
+final adminDoc = FirebaseFirestore.instance.collection('config').doc('admins');
 
 class AkunPage extends StatelessWidget {
   const AkunPage({super.key});
@@ -13,24 +18,134 @@ class AkunPage extends StatelessWidget {
       title: 'Akun',
       children: [
         InfoCard(
-          child: Row(
-            children: [
-              const CircleAvatar(
-                radius: 26,
-                child: Icon(Icons.person),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          child: StreamBuilder<User?>(
+            stream: auth.authStateChanges(),
+            builder: (context, userSnap) {
+              final user = userSnap.data;
+
+              if (user == null) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text('Admin Masjid', style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 4),
-                    Text('admin@masjid.com (mockup)'),
+                    Text('Admin', style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 8),
+                    FilledButton.icon(
+                      icon: const Icon(Icons.lock_open),
+                      label: const Text('Login Admin'),
+                      onPressed: () async {
+                        final messenger = ScaffoldMessenger.of(context);
+
+                        final usernameCtrl = TextEditingController();
+                        final passCtrl = TextEditingController();
+
+                        final ok = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Login Admin'),
+                            content: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                TextField(
+                                  controller: usernameCtrl,
+                                  decoration: const InputDecoration(labelText: 'Username'),
+                                  textInputAction: TextInputAction.next,
+                                ),
+                                TextField(
+                                  controller: passCtrl,
+                                  obscureText: true,
+                                  decoration: const InputDecoration(labelText: 'Password'),
+                                  textInputAction: TextInputAction.done,
+                                ),
+                              ],
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx, false),
+                                child: const Text('Batal'),
+                              ),
+                              FilledButton(
+                                onPressed: () => Navigator.pop(ctx, true),
+                                child: const Text('Login'),
+                              ),
+                            ],
+                          ),
+                        );
+
+                        final username = usernameCtrl.text.trim();
+                        final password = passCtrl.text;
+
+                        // cleanup
+                        usernameCtrl.dispose();
+                        passCtrl.dispose();
+
+                        if (ok != true) return;
+
+                        if (username.isEmpty || password.isEmpty) {
+                          messenger.showSnackBar(
+                            const SnackBar(content: Text('Username dan password wajib diisi')),
+                          );
+                          return;
+                        }
+
+                        final email = '$username@taamin.local';
+
+                        try {
+                          await auth.signInWithEmailAndPassword(email: email, password: password);
+                          messenger.showSnackBar(const SnackBar(content: Text('Login berhasil')));
+                        } on FirebaseAuthException catch (e) {
+                          messenger.showSnackBar(
+                            SnackBar(content: Text('Login gagal: ${e.code} — ${e.message ?? ""}')),
+                          );
+                        } catch (e) {
+                          messenger.showSnackBar(SnackBar(content: Text('Login gagal: $e')));
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Gunakan akun admin untuk mengubah Tabungan & Deposito.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: context.appColors.textColor2,
+                      ),
+                    ),
                   ],
-                ),
-              ),
-            ],
+                );
+              }
+
+              // Logged in: show whether this user is admin based on config/admins.emails
+              return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                stream: adminDoc.snapshots(),
+                builder: (context, adminSnap) {
+                  final data = adminSnap.data?.data() ?? const <String, dynamic>{};
+                  final emails = (data['emails'] as Map?)?.cast<String, dynamic>() ?? const {};
+                  final isAdmin = emails[user.email] == true;
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text('Admin', style: Theme.of(context).textTheme.titleMedium),
+                      const SizedBox(height: 6),
+                      Text(user.email ?? '-', style: Theme.of(context).textTheme.bodyMedium),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Chip(
+                            label: Text(isAdmin ? 'ADMIN' : 'Bukan admin'),
+                            avatar: Icon(isAdmin ? Icons.verified : Icons.info_outline),
+                          ),
+                          const Spacer(),
+                          TextButton.icon(
+                            icon: const Icon(Icons.logout),
+                            label: const Text('Logout'),
+                            onPressed: () => auth.signOut(),
+                          ),
+                        ],
+                      ),
+                    ],
+                  );
+                },
+              );
+            },
           ),
         ),
         const SizedBox(height: 12),

@@ -79,4 +79,5 @@ class DefaultFirebaseOptions {
     storageBucket: 'taamin-33650.firebasestorage.app',
     measurementId: 'G-W6PVTF49XP',
   );
+
 }
