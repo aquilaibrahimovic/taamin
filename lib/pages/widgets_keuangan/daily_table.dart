@@ -1,9 +1,26 @@
+import '../../app_theme.dart';
+import '../../widgets/controls.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../widgets/common.dart';
 import 'keu_models.dart';
 import 'keu_theme.dart';
+
+Future<bool> _confirmDelete(BuildContext context) async {
+  final result = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Hapus nota?'),
+      content: const Text('Nota yang sudah dihapus tidak bisa dikembalikan. Lanjutkan?'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
+        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Hapus')),
+      ],
+    ),
+  );
+  return result == true;
+}
 
 class DailyTable extends StatelessWidget {
   final List<RowWithSaldo> rows;
@@ -15,6 +32,10 @@ class DailyTable extends StatelessWidget {
 
   final DateTime selectedMonth;
 
+  final bool isAdmin;
+  final Future<void> Function(RowWithSaldo row) onUploadNota;
+  final Future<void> Function(RowWithSaldo row) onDeleteNota;
+
   const DailyTable({
     super.key,
     required this.rows,
@@ -23,6 +44,9 @@ class DailyTable extends StatelessWidget {
     required this.innerR,
     required this.theme,
     required this.selectedMonth,
+    required this.isAdmin,
+    required this.onUploadNota,
+    required this.onDeleteNota,
   });
 
   static const double colKet = 150;
@@ -32,6 +56,27 @@ class DailyTable extends StatelessWidget {
   static const double colSaldo = 150;
   static const double colNota = 90;
   static const double rowH = 52;
+
+  void _showNotaModal(BuildContext context, String url) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Nota'),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: AspectRatio(
+            aspectRatio: 1,
+            child: InteractiveViewer(
+              child: Image.network(url, fit: BoxFit.contain),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Tutup')),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -180,6 +225,8 @@ class DailyTable extends StatelessWidget {
                         ...List.generate(rows.length, (i) {
                           final r = rows[i];
                           final bg = rowBg(i);
+                          final c = context.appColors;
+                          final hasNota = r.notaUrl.isNotEmpty;
 
                           return Row(
                             children: [
@@ -214,9 +261,41 @@ class DailyTable extends StatelessWidget {
                                 height: rowH,
                                 alignment: Alignment.center,
                                 decoration: BoxDecoration(color: bg),
-                                child: TextButton(
-                                  onPressed: r.notaUrl.isNotEmpty ? () {/* TODO */} : null,
-                                  child: const Text('Lihat'),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    // Eye (public)
+                                    TinyIconAction(
+                                      icon: Icons.remove_red_eye_outlined,
+                                      tooltip: hasNota ? 'Lihat nota' : 'Belum ada nota',
+                                      color: hasNota ? theme.yesColor : theme.textColor2,
+                                      onPressed: hasNota ? () => _showNotaModal(context, r.notaUrl) : null,
+                                    ),
+
+                                    // Upload (admin only)
+                                    if (isAdmin)
+                                      TinyIconAction(
+                                        icon: Icons.upload_file_outlined,
+                                        tooltip: hasNota ? 'Nota sudah ada' : 'Upload nota',
+                                        color: hasNota ? theme.textColor2 : c.accent1a,
+                                        onPressed: hasNota ? null : () => onUploadNota(r),
+                                      ),
+
+                                    // Cross (admin only) – unlink/delete in Firestore
+                                    if (isAdmin)
+                                      TinyIconAction(
+                                        icon: Icons.close,
+                                        tooltip: hasNota ? 'Hapus nota' : 'Tidak ada nota',
+                                        color: hasNota ? theme.noColor : theme.textColor2,
+                                        onPressed: hasNota
+                                            ? () async {
+                                          final ok = await _confirmDelete(context);
+                                          if (!ok) return;
+                                          await onDeleteNota(r);
+                                        }
+                                            : null,
+                                      ),
+                                  ],
                                 ),
                               ),
                             ],

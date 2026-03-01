@@ -51,27 +51,25 @@ class FullWidthSegmentedToggle<T> extends StatelessWidget {
     final style = ButtonStyle(
       visualDensity: visualDensity,
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      shape: MaterialStateProperty.all(
+      shape: WidgetStatePropertyAll(
         RoundedRectangleBorder(borderRadius: borderRadius),
       ),
-      side: MaterialStateProperty.all(outline),
-      backgroundColor: MaterialStateProperty.resolveWith((states) {
-        if (states.contains(MaterialState.selected)) return selectedBg;
+      side: WidgetStatePropertyAll(outline),
+      backgroundColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) return selectedBg;
         return Colors.transparent;
       }),
-      foregroundColor: MaterialStateProperty.resolveWith((states) {
-        // Keep readable; let theme handle contrast
-        if (states.contains(MaterialState.disabled)) {
+      foregroundColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.disabled)) {
           return Theme.of(context).disabledColor;
         }
         return Theme.of(context).textTheme.bodyMedium?.color;
       }),
-      overlayColor: MaterialStateProperty.resolveWith((states) {
-        // Subtle hover/press overlay
-        if (states.contains(MaterialState.pressed)) {
+      overlayColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.pressed)) {
           return selectedBg.withAlpha(40);
         }
-        if (states.contains(MaterialState.hovered)) {
+        if (states.contains(WidgetState.hovered)) {
           return selectedBg.withAlpha(24);
         }
         return null;
@@ -302,6 +300,33 @@ class MonthSwitcher extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class TinyIconAction extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final Color color;
+  final VoidCallback? onPressed;
+
+  const TinyIconAction({
+    super.key,
+    required this.icon,
+    required this.tooltip,
+    required this.color,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onPressed,
+      icon: Icon(icon, size: 20, color: color),
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+      visualDensity: VisualDensity.compact,
     );
   }
 }

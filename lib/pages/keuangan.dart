@@ -1,3 +1,10 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+
+import 'package:path/path.dart' as p;
+import 'package:intl/intl.dart';
+import 'widgets_keuangan/imagekit_uploader.dart';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -16,11 +23,19 @@ import 'widgets_keuangan/friday_table.dart';
 import 'widgets_keuangan/monthly_eval.dart';
 import 'widgets_keuangan/daily_table.dart';
 
+import '../utils/pick_single_image.dart'; // adjust relative path
+
 class KeuanganPage extends StatefulWidget {
   const KeuanganPage({super.key});
 
   @override
   State<KeuanganPage> createState() => _KeuanganPageState();
+}
+
+String _sanitizeForFileName(String s) {
+  final trimmed = s.trim().toLowerCase();
+  final replaced = trimmed.replaceAll(RegExp(r'\s+'), '-');
+  return replaced.replaceAll(RegExp(r'[^a-z0-9\-_]'), '');
 }
 
 class _KeuanganPageState extends State<KeuanganPage> {
@@ -100,11 +115,13 @@ class _KeuanganPageState extends State<KeuanganPage> {
                           : DateTime.tryParse(ts?.toString() ?? '') ?? DateTime(1970);
 
                       baseRows.add(BaseRow(
+                        docId: doc.id,
                         keterangan: keterangan,
                         tanggal: tanggal,
                         masuk: (data['masuk'] as num?)?.toInt() ?? 0,
                         keluar: (data['keluar'] as num?)?.toInt() ?? 0,
                         notaUrl: (data['notaUrl'] ?? '').toString(),
+                        notaFileId: (data['notaFileId'] ?? '').toString(), // NEW
                       ));
                     }
 
@@ -230,6 +247,88 @@ class _KeuanganPageState extends State<KeuanganPage> {
                               innerR: innerR,
                               theme: keuTheme,
                               selectedMonth: state.selectedMonth,
+                              isAdmin: state.isAdmin,
+
+                              onUploadNota: (row) async {
+                                debugPrint('UPLOAD: start');
+
+                                final file = await pickSingleImageFile();
+                                debugPrint('UPLOAD: picked file = ${file?.path}');
+                                if (file == null) return;
+
+                                try {
+                                  debugPrint('UPLOAD: before counter');
+                                  final idx = DateTime.now().millisecondsSinceEpoch;
+
+                                  final ext = p.extension(file.path);
+                                  final tgl = DateFormat('yyyy-MM-dd').format(row.tanggal);
+                                  final ket = _sanitizeForFileName(row.keterangan);
+                                  final fileName = '$idx-$ket-$tgl$ext';
+                                  debugPrint('UPLOAD: filename = $fileName');
+
+                                  debugPrint('UPLOAD: before imagekit');
+                                  final result = await uploadToImageKit(
+                                    file: file,
+                                    fileName: fileName,
+                                    folder: '/nota',
+                                    publicKey: 'public_BiPjyspsiNYuhG3VDz3DLGh1uvs=',
+                                    authEndpoint: 'https://taaminmanage.netlify.app/.netlify/functions/imagekit-auth',
+                                  );
+                                  debugPrint('UPLOAD: imagekit url = ${result.url}');
+
+                                  debugPrint('UPLOAD: before firestore set');
+                                  await FirebaseFirestore.instance
+                                      .collection('keuangan')
+                                      .doc(row.docId)
+                                      .set({
+                                    'notaUrl': result.url,
+                                    'notaFileId': result.fileId ?? '',
+                                    'notaIndex': idx,
+                                    'notaFileName': fileName,
+                                  }, SetOptions(merge: true));
+                                  debugPrint('UPLOAD: done');
+                                } catch (e, st) {
+                                  debugPrint('Upload failed: $e');
+                                  debugPrint('$st');
+                                  if (!context.mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Upload gagal: $e')),
+                                  );
+                                }
+                              },
+
+                              onDeleteNota: (row) async {
+                                try {
+                                  final fileId = row.notaFileId.trim();
+
+                                  // If we have fileId, delete from ImageKit first
+                                  if (fileId.isNotEmpty) {
+                                    final resp = await http.post(
+                                      Uri.parse('https://taaminmanage.netlify.app/.netlify/functions/imagekit-delete'),
+                                      headers: {'Content-Type': 'application/json'},
+                                      body: jsonEncode({'fileId': fileId}),
+                                    );
+
+                                    if (resp.statusCode != 200) {
+                                      throw Exception('Gagal hapus di ImageKit: ${resp.statusCode} ${resp.body}');
+                                    }
+                                  }
+
+                                  // Clear Firestore (unlink)
+                                  await FirebaseFirestore.instance.collection('keuangan').doc(row.docId).set({
+                                    'notaUrl': '',
+                                    'notaFileId': '',
+                                    'notaIndex': null,
+                                    'notaFileName': '',
+                                  }, SetOptions(merge: true));
+                                } catch (e) {
+                                  debugPrint('Delete failed: $e');
+                                  if (!context.mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Hapus gagal: $e')),
+                                  );
+                                }
+                              },
                             ),
                           ],
                         );

@@ -37,6 +37,9 @@ dependencies:
   cloud_firestore: ^6.1.2
   intl: ^0.20.2
   firebase_auth: ^6.1.4
+  http: ^1.6.0
+  path: ^1.9.1
+  file_picker: ^10.3.10
 
 dev_dependencies:
   flutter_test:
