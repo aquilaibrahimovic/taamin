@@ -215,16 +215,6 @@ class _KeuanganPageState extends State<KeuanganPage> {
                             ),
 
                             const SizedBox(height: 12),
-                            const SectionTitle("Transaksi Per Jum'at", level: 2),
-
-                            FridayTable(
-                              fridayAggs: state.fridayAggs,
-                              formatRupiah: state.formatRupiah,
-                              innerR: innerR,
-                              theme: keuTheme,
-                            ),
-
-                            const SizedBox(height: 12),
                             const SectionTitle('Evaluasi Bulanan', level: 2),
 
                             MonthlyEval(
@@ -232,6 +222,16 @@ class _KeuanganPageState extends State<KeuanganPage> {
                               totalMasukBulan: state.totalMasukBulan,
                               totalKeluarBulan: state.totalKeluarBulan,
                               diffBulan: state.diffBulan,
+                              formatRupiah: state.formatRupiah,
+                              innerR: innerR,
+                              theme: keuTheme,
+                            ),
+
+                            const SizedBox(height: 12),
+                            const SectionTitle("Transaksi Per Jum'at", level: 2),
+
+                            FridayTable(
+                              fridayAggs: state.fridayAggs,
                               formatRupiah: state.formatRupiah,
                               innerR: innerR,
                               theme: keuTheme,
