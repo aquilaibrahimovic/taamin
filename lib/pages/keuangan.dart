@@ -60,6 +60,77 @@ class _KeuanganPageState extends State<KeuanganPage> {
 
   double _innerR() => (InfoCard.radius - InfoCard.paddingAll).clamp(0.0, InfoCard.radius);
 
+  Future<void> _showEditTransaksiDialog(RowWithSaldo row) async {
+    final ketC = TextEditingController(text: row.keterangan);
+    final masukC = TextEditingController(text: row.masuk.toString());
+    final keluarC = TextEditingController(text: row.keluar.toString());
+    DateTime selected = row.tanggal;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          title: const Text('Edit Transaksi'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: ketC,
+                  decoration: const InputDecoration(labelText: 'Keterangan'),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text('Tanggal: ${DateFormat('dd MMM yyyy HH:mm', 'id_ID').format(selected)}'),
+                    ),
+                    TextButton(
+                      onPressed: () async {
+                        final picked = await pickDateTime(context, initial: selected);
+                        if (picked != null) setState(() => selected = picked);
+                      },
+                      child: const Text('Ubah'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: masukC,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Masuk'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: keluarC,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Keluar'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Simpan')),
+          ],
+        ),
+      ),
+    );
+
+    if (result != true) return;
+
+    final newKet = ketC.text.trim();
+    final newMasuk = int.tryParse(masukC.text.trim()) ?? 0;
+    final newKeluar = int.tryParse(keluarC.text.trim()) ?? 0;
+
+    await FirebaseFirestore.instance.collection('keuangan').doc(row.docId).set({
+      'keterangan': newKet,
+      'tanggal': Timestamp.fromDate(selected),
+      'masuk': newMasuk,
+      'keluar': newKeluar,
+    }, SetOptions(merge: true));
+  }
+
   @override
   Widget build(BuildContext context) {
     final transaksiStream = FirebaseFirestore.instance
@@ -323,6 +394,33 @@ class _KeuanganPageState extends State<KeuanganPage> {
                                   }, SetOptions(merge: true));
                                 } catch (e) {
                                   debugPrint('Delete failed: $e');
+                                  if (!context.mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Hapus gagal: $e')),
+                                  );
+                                }
+                              },
+                              onEditRow: (row) async => _showEditTransaksiDialog(row),
+                              onDeleteRow: (row) async {
+                                try {
+                                  final fileId = row.notaFileId.trim();
+
+                                  // Delete ImageKit file if exists
+                                  if (fileId.isNotEmpty) {
+                                    final resp = await http.post(
+                                      Uri.parse('https://taaminmanage.netlify.app/.netlify/functions/imagekit-delete'),
+                                      headers: {'Content-Type': 'application/json'},
+                                      body: jsonEncode({'fileId': fileId}),
+                                    );
+                                    if (resp.statusCode != 200) {
+                                      throw Exception('Gagal hapus nota di ImageKit: ${resp.statusCode} ${resp.body}');
+                                    }
+                                  }
+
+                                  // Delete Firestore document
+                                  await FirebaseFirestore.instance.collection('keuangan').doc(row.docId).delete();
+                                } catch (e) {
+                                  debugPrint('Delete row failed: $e');
                                   if (!context.mounted) return;
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(content: Text('Hapus gagal: $e')),

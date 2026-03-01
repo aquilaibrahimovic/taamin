@@ -35,6 +35,8 @@ class DailyTable extends StatelessWidget {
   final bool isAdmin;
   final Future<void> Function(RowWithSaldo row) onUploadNota;
   final Future<void> Function(RowWithSaldo row) onDeleteNota;
+  final Future<void> Function(RowWithSaldo row) onEditRow;
+  final Future<void> Function(RowWithSaldo row) onDeleteRow;
 
   const DailyTable({
     super.key,
@@ -47,6 +49,8 @@ class DailyTable extends StatelessWidget {
     required this.isAdmin,
     required this.onUploadNota,
     required this.onDeleteNota,
+    required this.onEditRow,
+    required this.onDeleteRow,
   });
 
   static const double colKet = 150;
@@ -56,6 +60,7 @@ class DailyTable extends StatelessWidget {
   static const double colSaldo = 150;
   static const double colNota = 90;
   static const double rowH = 52;
+  static const double colAksi = 90;
 
   void _showNotaModal(BuildContext context, String url) {
     showDialog(
@@ -153,7 +158,7 @@ class DailyTable extends StatelessWidget {
       );
     }
 
-    final rightWidth = colTanggal + colMasuk + colKeluar + colSaldo + colNota;
+    final rightWidth = colTanggal + colMasuk + colKeluar + colSaldo + colNota + (isAdmin ? colAksi : 0);
 
     return InfoCard(
       child: ClipRRect(
@@ -218,6 +223,7 @@ class DailyTable extends StatelessWidget {
                             headerCell('Saldo Kas',
                                 w: colSaldo, align: Alignment.centerRight),
                             headerCell('Nota', w: colNota),
+                            if (isAdmin) headerCell('Aksi', w: colAksi, align: Alignment.center),
                           ],
                         ),
 
@@ -298,6 +304,47 @@ class DailyTable extends StatelessWidget {
                                   ],
                                 ),
                               ),
+                              if (isAdmin)
+                                Container(
+                                  width: colAksi,
+                                  height: rowH,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(color: bg),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      // Edit
+                                      TinyIconAction(
+                                        icon: Icons.edit_outlined,
+                                        tooltip: 'Edit transaksi',
+                                        color: c.accent1a,
+                                        onPressed: () => onEditRow(r),
+                                      ),
+                                      // Trash
+                                      TinyIconAction(
+                                        icon: Icons.delete_outline,
+                                        tooltip: 'Hapus transaksi',
+                                        color: theme.noColor,
+                                        onPressed: () async {
+                                          final ok = await showDialog<bool>(
+                                            context: context,
+                                            builder: (ctx) => AlertDialog(
+                                              title: const Text('Hapus transaksi?'),
+                                              content: const Text(
+                                                'Transaksi ini akan dihapus permanen beserta nota (jika ada). Lanjutkan?',
+                                              ),
+                                              actions: [
+                                                TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
+                                                FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Hapus')),
+                                              ],
+                                            ),
+                                          );
+                                          if (ok == true) await onDeleteRow(r);
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
                             ],
                           );
                         }),
@@ -348,6 +395,17 @@ class DailyTable extends StatelessWidget {
                               ),
                               child: const SizedBox.shrink(),
                             ),
+                            if (isAdmin)
+                              Container(
+                                width: colAksi,
+                                height: rowH,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: totalBg,
+                                  border: Border(top: BorderSide(color: dividerColor)),
+                                ),
+                                child: const SizedBox.shrink(),
+                              ),
                           ],
                         ),
                       ],

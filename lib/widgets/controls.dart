@@ -231,6 +231,35 @@ Future<DateTime?> pickMonthYear(
   );
 }
 
+Future<DateTime?> pickDateTime(
+    BuildContext context, {
+      required DateTime initial,
+      String locale = 'id_ID',
+    }) async {
+  final date = await showDatePicker(
+    context: context,
+    initialDate: initial,
+    firstDate: DateTime(2000),
+    lastDate: DateTime(2100),
+    locale: Locale(locale.split('_').first, locale.split('_').last),
+  );
+  if (date == null) return null;
+
+  final time = await showTimePicker(
+    context: context,
+    initialTime: TimeOfDay.fromDateTime(initial),
+  );
+  if (time == null) return null;
+
+  return DateTime(
+    date.year,
+    date.month,
+    date.day,
+    time.hour,
+    time.minute,
+  );
+}
+
 /// A reusable month switcher:  < Februari 2026 >
 /// Styled to match the segmented toggle outline + subtle fill.
 class MonthSwitcher extends StatelessWidget {
