@@ -432,6 +432,13 @@ class _KeuanganPageState extends State<KeuanganPage> {
               title: 'Keuangan',
               children: [
                 const SectionTitle('Keuangan Masjid', level: 1),
+                Text(
+                  'Tabungan dan Deposito diupdate setiap bulan karena harus konsultasi BKK.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: context.appColors.textColor2,
+                  ),
+                ),
+                const SizedBox(height: 12),
                 StreamBuilder<QuerySnapshot>(
                   stream: transaksiStream,
                   builder: (context, txSnap) {
