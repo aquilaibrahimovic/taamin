@@ -1,6 +1,7 @@
-import 'dart:async'; // ✅ Added
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+
 import 'pages/beranda.dart';
 import 'pages/informasi.dart';
 import 'pages/keuangan.dart';
@@ -16,8 +17,13 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _index = 0;
-  StreamSubscription? _notifSubscription; // ✅ Added
-  bool _firstLoad = true; // ✅ Used to ignore old history on startup
+  StreamSubscription? _notifSubscription;
+
+  // Track when the app opened to avoid showing historical popups
+  final DateTime _appStartTime = DateTime.now();
+
+  // Track last shown ID to prevent duplicate popups (local vs server triggers)
+  String? _lastShownId;
 
   @override
   void initState() {
@@ -27,15 +33,12 @@ class _MainShellState extends State<MainShell> {
 
   @override
   void dispose() {
-    _notifSubscription?.cancel(); // ✅ Clean up listener
+    _notifSubscription?.cancel();
     super.dispose();
   }
 
-  /// ✅ Global real-time listener for notifications
+  /// Robust real-time listener for notifications
   void _initNotificationListener() {
-    // We use a flag to skip the very first "historical" record when the app starts
-    bool isInitialData = true;
-
     _notifSubscription = FirebaseFirestore.instance
         .collection('notifications')
         .orderBy('timestamp', descending: true)
@@ -43,38 +46,46 @@ class _MainShellState extends State<MainShell> {
         .snapshots()
         .listen((snapshot) {
 
-      // 1. Skip the data that existed before the app was opened
-      if (isInitialData) {
-        isInitialData = false;
-        return;
-      }
-
       if (snapshot.docs.isNotEmpty) {
-        final data = snapshot.docs.first.data();
-        final msg = data['message'] as String? ?? 'Ada pembaruan transaksi.';
+        final doc = snapshot.docs.first;
+        final data = doc.data();
+        final String msg = data['message'] as String? ?? 'Ada pembaruan transaksi.';
+        final Timestamp? ts = data['timestamp'] as Timestamp?;
 
-        // 2. Log to console so you can verify the listener is firing
-        debugPrint('🔔 Notification received: $msg');
+        // Logic: Only show if it's a new document ID we haven't handled yet
+        // AND the timestamp is either null (local write) or after the app boot time.
+        bool isNewDoc = _lastShownId != doc.id;
+        bool isRecent = ts == null || ts.toDate().isAfter(_appStartTime);
 
-        // 3. Show the SnackBar
-        // Use a unique key or ClearSnackBars to prevent overlap if multiple edits happen fast
-        ScaffoldMessenger.of(context).clearSnackBars();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.notifications_active, color: Colors.white),
-                const SizedBox(width: 12),
-                Expanded(child: Text(msg)),
-              ],
+        if (isNewDoc && isRecent) {
+          // ✅ FIX: Check if the widget is still in the tree before using context
+          if (!mounted) return;
+
+          _lastShownId = doc.id;
+
+          debugPrint('🔔 Notification received: $msg');
+
+          final messenger = ScaffoldMessenger.of(context);
+          final theme = Theme.of(context);
+
+          messenger.clearSnackBars();
+          messenger.showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.notifications_active, color: Colors.white),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text(msg)),
+                ],
+              ),
+              behavior: SnackBarBehavior.floating,
+              backgroundColor: theme.colorScheme.primary,
+              duration: const Duration(seconds: 4),
+              margin: const EdgeInsets.all(16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: Theme.of(context).colorScheme.primary,
-            duration: const Duration(seconds: 5),
-            margin: const EdgeInsets.all(16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        );
+          );
+        }
       }
     }, onError: (error) {
       debugPrint('❌ Notification Listener Error: $error');

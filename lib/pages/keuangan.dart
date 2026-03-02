@@ -202,26 +202,34 @@ class _KeuanganPageState extends State<KeuanganPage> {
       'keluar': newKeluar,
     };
 
-    if (isEdit) {
-      await FirebaseFirestore.instance
-          .collection('keuangan')
-          .doc(row.docId)
-          .set(payload, SetOptions(merge: true));
-    } else {
-      await FirebaseFirestore.instance.collection('keuangan').add(payload);
+    try {
+      if (isEdit) {
+        await FirebaseFirestore.instance
+            .collection('keuangan')
+            .doc(row.docId)
+            .set(payload, SetOptions(merge: true));
+      } else {
+        await FirebaseFirestore.instance.collection('keuangan').add(payload);
+      }
+
+      // ✅ Notification logic: Using the variable properly
+      final notificationMsg = isEdit
+          ? 'Transaksi $newKet sudah diubah.'
+          : 'Transaksi $newKet sudah ditambahkan.';
+
+      await FirebaseFirestore.instance.collection('notifications').add({
+        'message': notificationMsg,
+        'timestamp': FieldValue.serverTimestamp(),
+        'type': 'keuangan_update',
+      });
+    } catch (e) {
+      debugPrint('Error saving transaction/notification: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal menyimpan: $e')),
+        );
+      }
     }
-
-    // ✅ Define the message once
-    final notificationMsg = isEdit
-        ? 'Transaksi $newKet sudah diubah.'
-        : 'Transaksi $newKet sudah ditambahkan.';
-
-// ✅ Use the variable here
-    await FirebaseFirestore.instance.collection('notifications').add({
-      'message': notificationMsg, // <--- Swap the logic for the variable name
-      'timestamp': FieldValue.serverTimestamp(),
-      'type': 'keuangan_update',
-    });
   }
 
   // ---------- Export month ----------
