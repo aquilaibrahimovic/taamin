@@ -92,8 +92,23 @@ class DailyTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ Change 1: Empty state notification with optional "Add" button for admins
     if (rows.isEmpty) {
-      return const InfoCard(child: Text('Tidak ada transaksi pada bulan ini.'));
+      return InfoCard(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('Tidak ada transaksi pada bulan ini.'),
+            if (isAdmin)
+              TinyIconAction(
+                icon: Icons.add_circle_outline,
+                tooltip: 'Tambah transaksi',
+                color: context.appColors.accent1a,
+                onPressed: () => onAddTransaksi(),
+              ),
+          ],
+        ),
+      );
     }
 
     // ✅ month totals from currently displayed rows (your selected month)
@@ -171,6 +186,36 @@ class DailyTable extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+
+
+          // ✅ Change 2: Footer row (Download public, others Admin-only)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              if (isAdmin)
+                TinyIconAction(
+                  icon: Icons.add_circle_outline,
+                  tooltip: 'Tambah transaksi',
+                  color: context.appColors.accent1a,
+                  onPressed: () => onAddTransaksi(),
+                ),
+              // Publicly accessible download button
+              TinyIconAction(
+                icon: Icons.download_outlined,
+                tooltip: 'Download bulan ini (XLSX/CSV)',
+                color: context.appColors.accent1a,
+                onPressed: () => onExportBulan(),
+              ),
+              if (isAdmin)
+                TinyIconAction(
+                  icon: Icons.upload_file_outlined,
+                  tooltip: 'Upload CSV',
+                  color: context.appColors.accent1a,
+                  onPressed: () => onImportCsv(),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
           ClipRRect(
             borderRadius: BorderRadius.circular(innerR),
             child: Row(
@@ -427,34 +472,6 @@ class DailyTable extends StatelessWidget {
               ],
             ),
           ),
-
-          // ✅ Admin-only footer row
-          if (isAdmin) ...[
-            const SizedBox(height: 10),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TinyIconAction(
-                  icon: Icons.add_circle_outline,
-                  tooltip: 'Tambah transaksi',
-                  color: context.appColors.accent1a,
-                  onPressed: () => onAddTransaksi(),
-                ),
-                TinyIconAction(
-                  icon: Icons.download_outlined,
-                  tooltip: 'Download bulan ini (XLSX/CSV)',
-                  color: context.appColors.accent1a,
-                  onPressed: () => onExportBulan(),
-                ),
-                TinyIconAction(
-                  icon: Icons.upload_file_outlined,
-                  tooltip: 'Upload CSV',
-                  color: context.appColors.accent1a,
-                  onPressed: () => onImportCsv(),
-                ),
-              ],
-            ),
-          ],
         ],
       ),
     );

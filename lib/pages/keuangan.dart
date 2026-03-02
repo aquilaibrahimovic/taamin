@@ -14,6 +14,7 @@ import 'package:flutter/material.dart';
 import '../utils/pick_single_image.dart';
 import '../widgets/common.dart';
 import '../widgets/controls.dart';
+import '../app_theme.dart';
 
 import 'widgets_keuangan/asset_cards.dart';
 import 'widgets_keuangan/daily_table.dart';
@@ -430,7 +431,7 @@ class _KeuanganPageState extends State<KeuanganPage> {
             return PageScaffold(
               title: 'Keuangan',
               children: [
-                const SectionTitle('Aset Masjid', level: 1),
+                const SectionTitle('Keuangan Masjid', level: 1),
                 StreamBuilder<QuerySnapshot>(
                   stream: transaksiStream,
                   builder: (context, txSnap) {
@@ -563,6 +564,13 @@ class _KeuanganPageState extends State<KeuanganPage> {
                             ),
                             const SizedBox(height: 12),
                             const SectionTitle('Transaksi Harian', level: 2),
+                            Text(
+                              'Geser ke kanan untuk detail transaksi.',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: context.appColors.textColor2,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
                             DailyTable(
                               rows: state.rowsForMonth,
                               formatTanggal: state.formatTanggal,
