@@ -1,29 +1,30 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'dart:io';
 
-import 'package:path/path.dart' as p;
+import 'package:excel/excel.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
-import 'widgets_keuangan/imagekit_uploader.dart';
+import 'package:path/path.dart' as p;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../utils/pick_single_image.dart';
 import '../widgets/common.dart';
 import '../widgets/controls.dart';
 
-import 'widgets_keuangan/keu_models.dart';
-import 'widgets_keuangan/keu_helpers.dart';
+import 'widgets_keuangan/asset_cards.dart';
+import 'widgets_keuangan/daily_table.dart';
+import 'widgets_keuangan/friday_table.dart';
+import 'widgets_keuangan/imagekit_uploader.dart';
 import 'widgets_keuangan/keu_format.dart';
+import 'widgets_keuangan/keu_helpers.dart';
+import 'widgets_keuangan/keu_models.dart';
 import 'widgets_keuangan/keu_state.dart';
 import 'widgets_keuangan/keu_theme.dart';
-
-import 'widgets_keuangan/asset_cards.dart';
-import 'widgets_keuangan/friday_table.dart';
 import 'widgets_keuangan/monthly_eval.dart';
-import 'widgets_keuangan/daily_table.dart';
-
-import '../utils/pick_single_image.dart'; // adjust relative path
 
 class KeuanganPage extends StatefulWidget {
   const KeuanganPage({super.key});
@@ -32,11 +33,67 @@ class KeuanganPage extends StatefulWidget {
   State<KeuanganPage> createState() => _KeuanganPageState();
 }
 
+// ---------- CSV helpers ----------
+
+String _csvEscape(String s) {
+  final needsQuotes =
+      s.contains(',') || s.contains('"') || s.contains('\n') || s.contains('\r');
+  var out = s.replaceAll('"', '""');
+  if (needsQuotes) out = '"$out"';
+  return out;
+}
+
+String toCsv(List<List<dynamic>> rows) {
+  return rows
+      .map((r) => r.map((v) => _csvEscape(v?.toString() ?? '')).join(','))
+      .join('\n');
+}
+
+List<List<String>> parseCsvSimple(String content) {
+  final lines = content
+      .split(RegExp(r'\r?\n'))
+      .where((l) => l.trim().isNotEmpty)
+      .toList();
+
+  final out = <List<String>>[];
+
+  for (final line in lines) {
+    final row = <String>[];
+    final buf = StringBuffer();
+    bool inQuotes = false;
+
+    for (int i = 0; i < line.length; i++) {
+      final ch = line[i];
+
+      if (ch == '"') {
+        if (inQuotes && i + 1 < line.length && line[i + 1] == '"') {
+          buf.write('"');
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (ch == ',' && !inQuotes) {
+        row.add(buf.toString());
+        buf.clear();
+      } else {
+        buf.write(ch);
+      }
+    }
+
+    row.add(buf.toString());
+    out.add(row);
+  }
+
+  return out;
+}
+
 String _sanitizeForFileName(String s) {
   final trimmed = s.trim().toLowerCase();
   final replaced = trimmed.replaceAll(RegExp(r'\s+'), '-');
   return replaced.replaceAll(RegExp(r'[^a-z0-9\-_]'), '');
 }
+
+// ---------------------------------------------------------------
 
 class _KeuanganPageState extends State<KeuanganPage> {
   static const bool newestFirst = false;
@@ -56,21 +113,26 @@ class _KeuanganPageState extends State<KeuanganPage> {
     _selectedMonth = DateTime(now.year, now.month);
   }
 
-  void _setMonth(DateTime m) => setState(() => _selectedMonth = DateTime(m.year, m.month));
+  void _setMonth(DateTime m) =>
+      setState(() => _selectedMonth = DateTime(m.year, m.month));
 
-  double _innerR() => (InfoCard.radius - InfoCard.paddingAll).clamp(0.0, InfoCard.radius);
+  double _innerR() =>
+      (InfoCard.radius - InfoCard.paddingAll).clamp(0.0, InfoCard.radius);
 
-  Future<void> _showEditTransaksiDialog(RowWithSaldo row) async {
-    final ketC = TextEditingController(text: row.keterangan);
-    final masukC = TextEditingController(text: row.masuk.toString());
-    final keluarC = TextEditingController(text: row.keluar.toString());
-    DateTime selected = row.tanggal;
+  // ---------- Add/Edit dialog ----------
+  Future<void> _showUpsertTransaksiDialog({RowWithSaldo? row}) async {
+    final isEdit = row != null;
 
-    final result = await showDialog<bool>(
+    final ketC = TextEditingController(text: row?.keterangan ?? '');
+    final masukC = TextEditingController(text: (row?.masuk ?? 0).toString());
+    final keluarC = TextEditingController(text: (row?.keluar ?? 0).toString());
+    DateTime selected = row?.tanggal ?? DateTime.now();
+
+    final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setState) => AlertDialog(
-          title: const Text('Edit Transaksi'),
+          title: Text(isEdit ? 'Edit Transaksi' : 'Tambah Transaksi'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -83,11 +145,14 @@ class _KeuanganPageState extends State<KeuanganPage> {
                 Row(
                   children: [
                     Expanded(
-                      child: Text('Tanggal: ${DateFormat('dd MMM yyyy HH:mm', 'id_ID').format(selected)}'),
+                      child: Text(
+                        'Tanggal: ${DateFormat('dd MMM yyyy HH:mm', 'id_ID').format(selected)}',
+                      ),
                     ),
                     TextButton(
                       onPressed: () async {
-                        final picked = await pickDateTime(context, initial: selected);
+                        final picked =
+                        await pickDateTime(context, initial: selected);
                         if (picked != null) setState(() => selected = picked);
                       },
                       child: const Text('Ubah'),
@@ -110,25 +175,232 @@ class _KeuanganPageState extends State<KeuanganPage> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
-            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Simpan')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('OK'),
+            ),
           ],
         ),
       ),
     );
 
-    if (result != true) return;
+    if (ok != true) return;
 
     final newKet = ketC.text.trim();
     final newMasuk = int.tryParse(masukC.text.trim()) ?? 0;
     final newKeluar = int.tryParse(keluarC.text.trim()) ?? 0;
 
-    await FirebaseFirestore.instance.collection('keuangan').doc(row.docId).set({
+    final payload = {
       'keterangan': newKet,
       'tanggal': Timestamp.fromDate(selected),
       'masuk': newMasuk,
       'keluar': newKeluar,
-    }, SetOptions(merge: true));
+    };
+
+    if (isEdit) {
+      final docId = row.docId;
+      await FirebaseFirestore.instance
+          .collection('keuangan')
+          .doc(docId)
+          .set(payload, SetOptions(merge: true));
+    } else {
+      await FirebaseFirestore.instance.collection('keuangan').add(payload);
+    }
+  }
+
+  // ---------- Export month ----------
+  Future<void> _exportMonthXlsxOrCsv(
+      List<RowWithSaldo> rowsForMonth, DateTime selectedMonth) async {
+
+    // Capture messenger before async gap
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      final filePath = await FilePicker.platform.saveFile(
+        dialogTitle: 'Simpan XLSX',
+        fileName: 'transaksi-${DateFormat('yyyy-MM').format(selectedMonth)}.xlsx',
+        allowedExtensions: ['xlsx'],
+        type: FileType.custom,
+      );
+      if (filePath == null) return;
+
+      final excel = Excel.createExcel();
+      final sheet = excel['Transaksi'];
+
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0)).value = TextCellValue('keterangan');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: 0)).value = TextCellValue('tanggal');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: 0)).value = TextCellValue('masuk');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: 0)).value = TextCellValue('keluar');
+
+      for (int i = 0; i < rowsForMonth.length; i++) {
+        final r = rowsForMonth[i];
+        final rowIndex = i + 1;
+        sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: rowIndex)).value = TextCellValue(r.keterangan);
+        sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: rowIndex)).value = TextCellValue(DateFormat('yyyy-MM-dd HH:mm').format(r.tanggal));
+        sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: rowIndex)).value = IntCellValue(r.masuk);
+        sheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: rowIndex)).value = IntCellValue(r.keluar);
+      }
+
+      final bytes = excel.encode();
+      if (bytes == null) throw Exception('Gagal encode XLSX');
+
+      await File(filePath).writeAsBytes(bytes, flush: true);
+
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(content: Text('XLSX berhasil disimpan')),
+      );
+      return;
+    } catch (_) {
+      // fallback to CSV logic below
+    }
+
+    final filePath = await FilePicker.platform.saveFile(
+      dialogTitle: 'Simpan CSV',
+      fileName: 'transaksi-${DateFormat('yyyy-MM').format(selectedMonth)}.csv',
+      allowedExtensions: ['csv'],
+      type: FileType.custom,
+    );
+    if (filePath == null) return;
+
+    final rows = <List<dynamic>>[
+      ['keterangan', 'tanggal', 'masuk', 'keluar'],
+      ...rowsForMonth.map((r) => [
+        r.keterangan,
+        DateFormat('yyyy-MM-dd HH:mm').format(r.tanggal),
+        r.masuk,
+        r.keluar,
+      ]),
+    ];
+
+    final csvStr = toCsv(rows);
+    await File(filePath).writeAsString(csvStr, flush: true);
+
+    if (!mounted) return;
+    messenger.showSnackBar(
+      const SnackBar(content: Text('CSV berhasil disimpan')),
+    );
+  }
+
+  // ---------- Import CSV ----------
+  Future<void> _importCsvToKeuangan(BuildContext ctx) async {
+    final messenger = ScaffoldMessenger.of(ctx);
+
+    final res = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['csv'],
+      allowMultiple: false,
+      withData: true,
+    );
+    if (res == null || res.files.isEmpty) return;
+
+    final bytes = res.files.single.bytes;
+    if (bytes == null) {
+      if (!ctx.mounted) return;
+      messenger.showSnackBar(const SnackBar(content: Text('Gagal membaca file CSV')));
+      return;
+    }
+
+    final content = utf8.decode(bytes);
+    final parsed = parseCsvSimple(content);
+
+    if (parsed.isEmpty) {
+      if (!ctx.mounted) return;
+      messenger.showSnackBar(const SnackBar(content: Text('CSV kosong')));
+      return;
+    }
+
+    final header = parsed.first.map((e) => e.trim().toLowerCase()).toList();
+    final kKet = header.indexOf('keterangan');
+    final kTgl = header.indexOf('tanggal');
+    final kMasuk = header.indexOf('masuk');
+    final kKeluar = header.indexOf('keluar');
+
+    if ([kKet, kTgl, kMasuk, kKeluar].any((i) => i < 0)) {
+      if (!ctx.mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Header CSV harus: keterangan,tanggal,masuk,keluar')),
+      );
+      return;
+    }
+
+    final rowCount = parsed.length - 1;
+    if (!ctx.mounted) return;
+
+    final ok = await showDialog<bool>(
+      context: ctx,
+      builder: (dctx) => AlertDialog(
+        title: const Text('Import CSV?'),
+        content: Text(
+          'File berisi $rowCount baris. Ini akan MENAMBAH transaksi baru. Lanjutkan?',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dctx, false), child: const Text('Batal')),
+          FilledButton(onPressed: () => Navigator.pop(dctx, true), child: const Text('Import')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    final col = FirebaseFirestore.instance.collection('keuangan');
+    final batch = FirebaseFirestore.instance.batch();
+    final maxIndex = [kKet, kTgl, kMasuk, kKeluar].reduce((a, b) => a > b ? a : b);
+
+    int added = 0;
+    for (int i = 1; i < parsed.length; i++) {
+      final row = parsed[i];
+      if (row.length <= maxIndex) continue;
+      if (row.every((v) => v.trim().isEmpty)) continue;
+
+      final ket = row[kKet].trim();
+      final tglStr = row[kTgl].trim();
+
+      DateTime tgl;
+      try {
+        tgl = DateFormat('M/d/yyyy').parseStrict(tglStr);
+      } catch (_) {
+        tgl = DateTime.tryParse(tglStr) ?? DateTime(1970);
+      }
+
+      final masuk = int.tryParse(row[kMasuk].trim()) ?? 0;
+      final keluar = int.tryParse(row[kKeluar].trim()) ?? 0;
+
+      final docRef = col.doc();
+      batch.set(docRef, {
+        'keterangan': ket,
+        'tanggal': Timestamp.fromDate(tgl),
+        'masuk': masuk,
+        'keluar': keluar,
+        'notaUrl': '',
+        'notaFileId': '',
+        'notaIndex': null,
+        'notaFileName': '',
+      });
+      added++;
+    }
+
+    await batch.commit();
+
+    if (!ctx.mounted) return;
+    messenger.showSnackBar(
+      SnackBar(content: Text('Import selesai: $added transaksi ditambahkan')),
+    );
+  }
+
+  Future<void> _deleteImageKitIfAny(String fileId) async {
+    if (fileId.trim().isEmpty) return;
+    final resp = await http.post(
+      Uri.parse('https://taaminmanage.netlify.app/.netlify/functions/imagekit-delete'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'fileId': fileId.trim()}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception('Gagal hapus nota di ImageKit: ${resp.statusCode} ${resp.body}');
+    }
   }
 
   @override
@@ -138,9 +410,7 @@ class _KeuanganPageState extends State<KeuanganPage> {
         .orderBy('tanggal', descending: false)
         .snapshots();
 
-    final metaRef = FirebaseFirestore.instance.collection(_metaCollection).doc(_metaDocId);
     final adminDoc = FirebaseFirestore.instance.collection('config').doc('admins');
-
     final innerR = _innerR();
     final keuTheme = KeuTheme.from(context);
 
@@ -155,12 +425,12 @@ class _KeuanganPageState extends State<KeuanganPage> {
             final adminData = adminSnap.data?.data() ?? const <String, dynamic>{};
             final emails = (adminData['emails'] as Map?)?.cast<String, dynamic>() ?? const {};
             final isAdmin = user != null && emails[user.email] == true;
+            final metaRef = FirebaseFirestore.instance.collection(_metaCollection).doc(_metaDocId);
 
             return PageScaffold(
               title: 'Keuangan',
               children: [
                 const SectionTitle('Aset Masjid', level: 1),
-
                 StreamBuilder<QuerySnapshot>(
                   stream: transaksiStream,
                   builder: (context, txSnap) {
@@ -178,8 +448,6 @@ class _KeuanganPageState extends State<KeuanganPage> {
                     final baseRows = <BaseRow>[];
                     for (final doc in docs) {
                       final data = doc.data() as Map<String, dynamic>;
-                      final keterangan = (data['keterangan'] ?? '').toString();
-
                       final ts = data['tanggal'];
                       final tanggal = (ts is Timestamp)
                           ? ts.toDate()
@@ -187,12 +455,12 @@ class _KeuanganPageState extends State<KeuanganPage> {
 
                       baseRows.add(BaseRow(
                         docId: doc.id,
-                        keterangan: keterangan,
+                        keterangan: (data['keterangan'] ?? '').toString(),
                         tanggal: tanggal,
                         masuk: (data['masuk'] as num?)?.toInt() ?? 0,
                         keluar: (data['keluar'] as num?)?.toInt() ?? 0,
                         notaUrl: (data['notaUrl'] ?? '').toString(),
-                        notaFileId: (data['notaFileId'] ?? '').toString(), // NEW
+                        notaFileId: (data['notaFileId'] ?? '').toString(),
                       ));
                     }
 
@@ -204,18 +472,11 @@ class _KeuanganPageState extends State<KeuanganPage> {
                     }
 
                     final kasLatest = rowsChrono.isNotEmpty ? rowsChrono.last.saldoKas : 0;
+                    final filteredChrono = rowsChrono.where((r) => KeuHelpers.isInMonth(r.tanggal, _selectedMonth)).toList();
+                    final rowsForMonth = newestFirst ? filteredChrono.reversed.toList() : filteredChrono;
 
-                    final filteredChrono = rowsChrono
-                        .where((r) => KeuHelpers.isInMonth(r.tanggal, _selectedMonth))
-                        .toList();
-
-                    final rowsForMonth =
-                    newestFirst ? filteredChrono.reversed.toList() : filteredChrono;
-
-                    final totalMasukBulan =
-                    filteredChrono.fold<int>(0, (s, r) => s + r.masuk);
-                    final totalKeluarBulan =
-                    filteredChrono.fold<int>(0, (s, r) => s + r.keluar);
+                    final totalMasukBulan = filteredChrono.fold<int>(0, (s, r) => s + r.masuk);
+                    final totalKeluarBulan = filteredChrono.fold<int>(0, (s, r) => s + r.keluar);
                     final diffBulan = totalMasukBulan - totalKeluarBulan;
 
                     final fridayAggs = KeuHelpers.computeFridayAggs(
@@ -227,7 +488,6 @@ class _KeuanganPageState extends State<KeuanganPage> {
                     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
                       stream: metaRef.snapshots(),
                       builder: (context, metaSnap) {
-                        // ✅ cleaner default init
                         if (metaSnap.hasData && metaSnap.data != null && !metaSnap.data!.exists) {
                           WidgetsBinding.instance.addPostFrameCallback((_) {
                             KeuHelpers.ensureMetaDefaults(
@@ -274,20 +534,16 @@ class _KeuanganPageState extends State<KeuanganPage> {
                               metaRef: state.metaRef,
                               formatRupiah: state.formatRupiah,
                             ),
-
                             const SizedBox(height: 16),
                             const SectionTitle('Neraca Bulanan', level: 1),
                             const SizedBox(height: 12),
-
                             MonthSwitcher(
                               selectedMonth: state.selectedMonth,
                               onChanged: _setMonth,
                               locale: 'id_ID',
                             ),
-
                             const SizedBox(height: 12),
                             const SectionTitle('Evaluasi Bulanan', level: 2),
-
                             MonthlyEval(
                               selectedMonth: state.selectedMonth,
                               totalMasukBulan: state.totalMasukBulan,
@@ -297,20 +553,16 @@ class _KeuanganPageState extends State<KeuanganPage> {
                               innerR: innerR,
                               theme: keuTheme,
                             ),
-
                             const SizedBox(height: 12),
                             const SectionTitle("Transaksi Per Jum'at", level: 2),
-
                             FridayTable(
                               fridayAggs: state.fridayAggs,
                               formatRupiah: state.formatRupiah,
                               innerR: innerR,
                               theme: keuTheme,
                             ),
-
                             const SizedBox(height: 12),
                             const SectionTitle('Transaksi Harian', level: 2),
-
                             DailyTable(
                               rows: state.rowsForMonth,
                               formatTanggal: state.formatTanggal,
@@ -319,25 +571,17 @@ class _KeuanganPageState extends State<KeuanganPage> {
                               theme: keuTheme,
                               selectedMonth: state.selectedMonth,
                               isAdmin: state.isAdmin,
-
                               onUploadNota: (row) async {
-                                debugPrint('UPLOAD: start');
-
+                                final messenger = ScaffoldMessenger.of(context);
                                 final file = await pickSingleImageFile();
-                                debugPrint('UPLOAD: picked file = ${file?.path}');
                                 if (file == null) return;
-
                                 try {
-                                  debugPrint('UPLOAD: before counter');
                                   final idx = DateTime.now().millisecondsSinceEpoch;
-
                                   final ext = p.extension(file.path);
                                   final tgl = DateFormat('yyyy-MM-dd').format(row.tanggal);
                                   final ket = _sanitizeForFileName(row.keterangan);
                                   final fileName = '$idx-$ket-$tgl$ext';
-                                  debugPrint('UPLOAD: filename = $fileName');
 
-                                  debugPrint('UPLOAD: before imagekit');
                                   final result = await uploadToImageKit(
                                     file: file,
                                     fileName: fileName,
@@ -345,9 +589,7 @@ class _KeuanganPageState extends State<KeuanganPage> {
                                     publicKey: 'public_BiPjyspsiNYuhG3VDz3DLGh1uvs=',
                                     authEndpoint: 'https://taaminmanage.netlify.app/.netlify/functions/imagekit-auth',
                                   );
-                                  debugPrint('UPLOAD: imagekit url = ${result.url}');
 
-                                  debugPrint('UPLOAD: before firestore set');
                                   await FirebaseFirestore.instance
                                       .collection('keuangan')
                                       .doc(row.docId)
@@ -357,35 +599,15 @@ class _KeuanganPageState extends State<KeuanganPage> {
                                     'notaIndex': idx,
                                     'notaFileName': fileName,
                                   }, SetOptions(merge: true));
-                                  debugPrint('UPLOAD: done');
-                                } catch (e, st) {
-                                  debugPrint('Upload failed: $e');
-                                  debugPrint('$st');
-                                  if (!context.mounted) return;
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('Upload gagal: $e')),
-                                  );
+                                } catch (e) {
+                                  if (!mounted) return;
+                                  messenger.showSnackBar(SnackBar(content: Text('Upload gagal: $e')));
                                 }
                               },
-
                               onDeleteNota: (row) async {
+                                final messenger = ScaffoldMessenger.of(context);
                                 try {
-                                  final fileId = row.notaFileId.trim();
-
-                                  // If we have fileId, delete from ImageKit first
-                                  if (fileId.isNotEmpty) {
-                                    final resp = await http.post(
-                                      Uri.parse('https://taaminmanage.netlify.app/.netlify/functions/imagekit-delete'),
-                                      headers: {'Content-Type': 'application/json'},
-                                      body: jsonEncode({'fileId': fileId}),
-                                    );
-
-                                    if (resp.statusCode != 200) {
-                                      throw Exception('Gagal hapus di ImageKit: ${resp.statusCode} ${resp.body}');
-                                    }
-                                  }
-
-                                  // Clear Firestore (unlink)
+                                  await _deleteImageKitIfAny(row.notaFileId);
                                   await FirebaseFirestore.instance.collection('keuangan').doc(row.docId).set({
                                     'notaUrl': '',
                                     'notaFileId': '',
@@ -393,38 +615,30 @@ class _KeuanganPageState extends State<KeuanganPage> {
                                     'notaFileName': '',
                                   }, SetOptions(merge: true));
                                 } catch (e) {
-                                  debugPrint('Delete failed: $e');
-                                  if (!context.mounted) return;
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('Hapus gagal: $e')),
-                                  );
+                                  if (!mounted) return;
+                                  messenger.showSnackBar(SnackBar(content: Text('Hapus gagal: $e')));
                                 }
                               },
-                              onEditRow: (row) async => _showEditTransaksiDialog(row),
+                              onEditRow: (row) async => _showUpsertTransaksiDialog(row: row),
                               onDeleteRow: (row) async {
+                                final messenger = ScaffoldMessenger.of(context);
                                 try {
-                                  final fileId = row.notaFileId.trim();
-
-                                  // Delete ImageKit file if exists
-                                  if (fileId.isNotEmpty) {
-                                    final resp = await http.post(
-                                      Uri.parse('https://taaminmanage.netlify.app/.netlify/functions/imagekit-delete'),
-                                      headers: {'Content-Type': 'application/json'},
-                                      body: jsonEncode({'fileId': fileId}),
-                                    );
-                                    if (resp.statusCode != 200) {
-                                      throw Exception('Gagal hapus nota di ImageKit: ${resp.statusCode} ${resp.body}');
-                                    }
-                                  }
-
-                                  // Delete Firestore document
+                                  await _deleteImageKitIfAny(row.notaFileId);
                                   await FirebaseFirestore.instance.collection('keuangan').doc(row.docId).delete();
                                 } catch (e) {
-                                  debugPrint('Delete row failed: $e');
-                                  if (!context.mounted) return;
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('Hapus gagal: $e')),
-                                  );
+                                  if (!mounted) return;
+                                  messenger.showSnackBar(SnackBar(content: Text('Hapus gagal: $e')));
+                                }
+                              },
+                              onAddTransaksi: () async => _showUpsertTransaksiDialog(),
+                              onExportBulan: () async => _exportMonthXlsxOrCsv(state.rowsForMonth, state.selectedMonth),
+                              onImportCsv: () async {
+                                final messenger = ScaffoldMessenger.of(context);
+                                try {
+                                  await _importCsvToKeuangan(context);
+                                } catch (e) {
+                                  if (!mounted) return;
+                                  messenger.showSnackBar(SnackBar(content: Text('Import gagal: $e')));
                                 }
                               },
                             ),

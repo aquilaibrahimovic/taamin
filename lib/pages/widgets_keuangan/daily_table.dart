@@ -38,6 +38,10 @@ class DailyTable extends StatelessWidget {
   final Future<void> Function(RowWithSaldo row) onEditRow;
   final Future<void> Function(RowWithSaldo row) onDeleteRow;
 
+  final Future<void> Function() onAddTransaksi;
+  final Future<void> Function() onExportBulan;
+  final Future<void> Function() onImportCsv;
+
   const DailyTable({
     super.key,
     required this.rows,
@@ -51,6 +55,9 @@ class DailyTable extends StatelessWidget {
     required this.onDeleteNota,
     required this.onEditRow,
     required this.onDeleteRow,
+    required this.onAddTransaksi,
+    required this.onExportBulan,
+    required this.onImportCsv,
   });
 
   static const double colKet = 150;
@@ -161,261 +168,294 @@ class DailyTable extends StatelessWidget {
     final rightWidth = colTanggal + colMasuk + colKeluar + colSaldo + colNota + (isAdmin ? colAksi : 0);
 
     return InfoCard(
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(innerR),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Left column (Keterangan)
-            SizedBox(
-              width: colKet,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  headerCell('Keterangan', w: colKet),
-                  ...List.generate(rows.length, (i) {
-                    final r = rows[i];
-                    return dataCell(
-                      r.keterangan,
-                      w: colKet,
-                      bgColor: ketBg(i),
-                    );
-                  }),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(innerR),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Left column (Keterangan)
+                SizedBox(
+                  width: colKet,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      headerCell('Keterangan', w: colKet),
+                      ...List.generate(rows.length, (i) {
+                        final r = rows[i];
+                        return dataCell(
+                          r.keterangan,
+                          w: colKet,
+                          bgColor: ketBg(i),
+                        );
+                      }),
 
-                  // ✅ TOTAL row (left)
-                  dataCell(
-                    'TOTAL',
-                    w: colKet,
-                    bgColor: totalBg,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodyMedium
-                        ?.copyWith(fontWeight: FontWeight.w800),
-                    border: Border(top: BorderSide(color: dividerColor)),
+                      // ✅ TOTAL row (left)
+                      dataCell(
+                        'TOTAL',
+                        w: colKet,
+                        bgColor: totalBg,
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodyMedium
+                            ?.copyWith(fontWeight: FontWeight.w800),
+                        border: Border(top: BorderSide(color: dividerColor)),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
+                ),
 
-            // Right scrollable columns
-            Expanded(
-              child: Scrollbar(
-                controller: hController,
-                thumbVisibility: true,
-                child: SingleChildScrollView(
-                  controller: hController,
-                  scrollDirection: Axis.horizontal,
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  dragStartBehavior: DragStartBehavior.down,
-                  child: SizedBox(
-                    width: rightWidth,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Header row
-                        Row(
+                // Right scrollable columns
+                Expanded(
+                  child: Scrollbar(
+                    controller: hController,
+                    thumbVisibility: true,
+                    child: SingleChildScrollView(
+                      controller: hController,
+                      scrollDirection: Axis.horizontal,
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      dragStartBehavior: DragStartBehavior.down,
+                      child: SizedBox(
+                        width: rightWidth,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            headerCell('Tanggal', w: colTanggal),
-                            headerCell('Masuk',
-                                w: colMasuk, align: Alignment.centerRight),
-                            headerCell('Keluar',
-                                w: colKeluar, align: Alignment.centerRight),
-                            headerCell('Saldo Kas',
-                                w: colSaldo, align: Alignment.centerRight),
-                            headerCell('Nota', w: colNota),
-                            if (isAdmin) headerCell('Aksi', w: colAksi, align: Alignment.center),
-                          ],
-                        ),
+                            // Header row
+                            Row(
+                              children: [
+                                headerCell('Tanggal', w: colTanggal),
+                                headerCell('Masuk',
+                                    w: colMasuk, align: Alignment.centerRight),
+                                headerCell('Keluar',
+                                    w: colKeluar, align: Alignment.centerRight),
+                                headerCell('Saldo Kas',
+                                    w: colSaldo, align: Alignment.centerRight),
+                                headerCell('Nota', w: colNota),
+                                if (isAdmin) headerCell('Aksi', w: colAksi, align: Alignment.center),
+                              ],
+                            ),
 
-                        // Data rows
-                        ...List.generate(rows.length, (i) {
-                          final r = rows[i];
-                          final bg = rowBg(i);
-                          final c = context.appColors;
-                          final hasNota = r.notaUrl.isNotEmpty;
+                            // Data rows
+                            ...List.generate(rows.length, (i) {
+                              final r = rows[i];
+                              final bg = rowBg(i);
+                              final c = context.appColors;
+                              final hasNota = r.notaUrl.isNotEmpty;
 
-                          return Row(
-                            children: [
-                              dataCell(
-                                formatTanggal(r.tanggal),
-                                w: colTanggal,
-                                bgColor: bg,
-                              ),
-                              dataCell(
-                                formatRupiah(r.masuk),
-                                w: colMasuk,
-                                align: Alignment.centerRight,
-                                bgColor: bg,
-                                style: monoNumStyle?.copyWith(color: theme.yesColor),
-                              ),
-                              dataCell(
-                                formatRupiah(r.keluar),
-                                w: colKeluar,
-                                align: Alignment.centerRight,
-                                bgColor: bg,
-                                style: monoNumStyle?.copyWith(color: theme.noColor),
-                              ),
-                              dataCell(
-                                formatRupiah(r.saldoKas),
-                                w: colSaldo,
-                                align: Alignment.centerRight,
-                                bgColor: bg,
-                                style: monoNumStyle,
-                              ),
-                              Container(
-                                width: colNota,
-                                height: rowH,
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(color: bg),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    // Eye (public)
-                                    TinyIconAction(
-                                      icon: Icons.remove_red_eye_outlined,
-                                      tooltip: hasNota ? 'Lihat nota' : 'Belum ada nota',
-                                      color: hasNota ? theme.yesColor : theme.textColor2,
-                                      onPressed: hasNota ? () => _showNotaModal(context, r.notaUrl) : null,
-                                    ),
-
-                                    // Upload (admin only)
-                                    if (isAdmin)
-                                      TinyIconAction(
-                                        icon: Icons.upload_file_outlined,
-                                        tooltip: hasNota ? 'Nota sudah ada' : 'Upload nota',
-                                        color: hasNota ? theme.textColor2 : c.accent1a,
-                                        onPressed: hasNota ? null : () => onUploadNota(r),
-                                      ),
-
-                                    // Cross (admin only) – unlink/delete in Firestore
-                                    if (isAdmin)
-                                      TinyIconAction(
-                                        icon: Icons.close,
-                                        tooltip: hasNota ? 'Hapus nota' : 'Tidak ada nota',
-                                        color: hasNota ? theme.noColor : theme.textColor2,
-                                        onPressed: hasNota
-                                            ? () async {
-                                          final ok = await _confirmDelete(context);
-                                          if (!ok) return;
-                                          await onDeleteNota(r);
-                                        }
-                                            : null,
-                                      ),
-                                  ],
-                                ),
-                              ),
-                              if (isAdmin)
-                                Container(
-                                  width: colAksi,
-                                  height: rowH,
-                                  alignment: Alignment.center,
-                                  decoration: BoxDecoration(color: bg),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      // Edit
-                                      TinyIconAction(
-                                        icon: Icons.edit_outlined,
-                                        tooltip: 'Edit transaksi',
-                                        color: c.accent1a,
-                                        onPressed: () => onEditRow(r),
-                                      ),
-                                      // Trash
-                                      TinyIconAction(
-                                        icon: Icons.delete_outline,
-                                        tooltip: 'Hapus transaksi',
-                                        color: theme.noColor,
-                                        onPressed: () async {
-                                          final ok = await showDialog<bool>(
-                                            context: context,
-                                            builder: (ctx) => AlertDialog(
-                                              title: const Text('Hapus transaksi?'),
-                                              content: const Text(
-                                                'Transaksi ini akan dihapus permanen beserta nota (jika ada). Lanjutkan?',
-                                              ),
-                                              actions: [
-                                                TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
-                                                FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Hapus')),
-                                              ],
-                                            ),
-                                          );
-                                          if (ok == true) await onDeleteRow(r);
-                                        },
-                                      ),
-                                    ],
+                              return Row(
+                                children: [
+                                  dataCell(
+                                    formatTanggal(r.tanggal),
+                                    w: colTanggal,
+                                    bgColor: bg,
                                   ),
-                                ),
-                            ],
-                          );
-                        }),
+                                  dataCell(
+                                    formatRupiah(r.masuk),
+                                    w: colMasuk,
+                                    align: Alignment.centerRight,
+                                    bgColor: bg,
+                                    style: monoNumStyle?.copyWith(color: theme.yesColor),
+                                  ),
+                                  dataCell(
+                                    formatRupiah(r.keluar),
+                                    w: colKeluar,
+                                    align: Alignment.centerRight,
+                                    bgColor: bg,
+                                    style: monoNumStyle?.copyWith(color: theme.noColor),
+                                  ),
+                                  dataCell(
+                                    formatRupiah(r.saldoKas),
+                                    w: colSaldo,
+                                    align: Alignment.centerRight,
+                                    bgColor: bg,
+                                    style: monoNumStyle,
+                                  ),
+                                  Container(
+                                    width: colNota,
+                                    height: rowH,
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(color: bg),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        // Eye (public)
+                                        TinyIconAction(
+                                          icon: Icons.remove_red_eye_outlined,
+                                          tooltip: hasNota ? 'Lihat nota' : 'Belum ada nota',
+                                          color: hasNota ? theme.yesColor : theme.textColor2,
+                                          onPressed: hasNota ? () => _showNotaModal(context, r.notaUrl) : null,
+                                        ),
 
-                        // ✅ TOTAL row (right)
-                        Row(
-                          children: [
-                            dataCell(
-                              DateFormat('MMMM y', 'id_ID').format(selectedMonth),
-                              w: colTanggal,
-                              bgColor: totalBg,
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w800,
-                              ),
-                              border: Border(top: BorderSide(color: dividerColor)),
-                            ),
-                            dataCell(
-                              formatRupiah(totalMasuk),
-                              w: colMasuk,
-                              align: Alignment.centerRight,
-                              bgColor: totalBg,
-                              style: monoNumBold?.copyWith(color: theme.yesColor),
-                              border: Border(top: BorderSide(color: dividerColor)),
-                            ),
-                            dataCell(
-                              formatRupiah(totalKeluar),
-                              w: colKeluar,
-                              align: Alignment.centerRight,
-                              bgColor: totalBg,
-                              style: monoNumBold?.copyWith(color: theme.noColor),
-                              border: Border(top: BorderSide(color: dividerColor)),
-                            ),
-                            dataCell(
-                              '-', // saldo total for month doesn't make sense here
-                              w: colSaldo,
-                              align: Alignment.centerRight,
-                              bgColor: totalBg,
-                              style: monoNumBold,
-                              border: Border(top: BorderSide(color: dividerColor)),
-                            ),
-                            Container(
-                              width: colNota,
-                              height: rowH,
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: totalBg,
-                                border: Border(top: BorderSide(color: dividerColor)),
-                              ),
-                              child: const SizedBox.shrink(),
-                            ),
-                            if (isAdmin)
-                              Container(
-                                width: colAksi,
-                                height: rowH,
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(
-                                  color: totalBg,
+                                        // Upload (admin only)
+                                        if (isAdmin)
+                                          TinyIconAction(
+                                            icon: Icons.upload_file_outlined,
+                                            tooltip: hasNota ? 'Nota sudah ada' : 'Upload nota',
+                                            color: hasNota ? theme.textColor2 : c.accent1a,
+                                            onPressed: hasNota ? null : () => onUploadNota(r),
+                                          ),
+
+                                        // Cross (admin only) – unlink/delete in Firestore
+                                        if (isAdmin)
+                                          TinyIconAction(
+                                            icon: Icons.close,
+                                            tooltip: hasNota ? 'Hapus nota' : 'Tidak ada nota',
+                                            color: hasNota ? theme.noColor : theme.textColor2,
+                                            onPressed: hasNota
+                                                ? () async {
+                                              final ok = await _confirmDelete(context);
+                                              if (!ok) return;
+                                              await onDeleteNota(r);
+                                            }
+                                                : null,
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (isAdmin)
+                                    Container(
+                                      width: colAksi,
+                                      height: rowH,
+                                      alignment: Alignment.center,
+                                      decoration: BoxDecoration(color: bg),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          // Edit
+                                          TinyIconAction(
+                                            icon: Icons.edit_outlined,
+                                            tooltip: 'Edit transaksi',
+                                            color: c.accent1a,
+                                            onPressed: () => onEditRow(r),
+                                          ),
+                                          // Trash
+                                          TinyIconAction(
+                                            icon: Icons.delete_outline,
+                                            tooltip: 'Hapus transaksi',
+                                            color: theme.noColor,
+                                            onPressed: () async {
+                                              final ok = await showDialog<bool>(
+                                                context: context,
+                                                builder: (ctx) => AlertDialog(
+                                                  title: const Text('Hapus transaksi?'),
+                                                  content: const Text(
+                                                    'Transaksi ini akan dihapus permanen beserta nota (jika ada). Lanjutkan?',
+                                                  ),
+                                                  actions: [
+                                                    TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
+                                                    FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Hapus')),
+                                                  ],
+                                                ),
+                                              );
+                                              if (ok == true) await onDeleteRow(r);
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                ],
+                              );
+                            }),
+
+                            // ✅ TOTAL row (right)
+                            Row(
+                              children: [
+                                dataCell(
+                                  DateFormat('MMMM y', 'id_ID').format(selectedMonth),
+                                  w: colTanggal,
+                                  bgColor: totalBg,
+                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                  ),
                                   border: Border(top: BorderSide(color: dividerColor)),
                                 ),
-                                child: const SizedBox.shrink(),
-                              ),
+                                dataCell(
+                                  formatRupiah(totalMasuk),
+                                  w: colMasuk,
+                                  align: Alignment.centerRight,
+                                  bgColor: totalBg,
+                                  style: monoNumBold?.copyWith(color: theme.yesColor),
+                                  border: Border(top: BorderSide(color: dividerColor)),
+                                ),
+                                dataCell(
+                                  formatRupiah(totalKeluar),
+                                  w: colKeluar,
+                                  align: Alignment.centerRight,
+                                  bgColor: totalBg,
+                                  style: monoNumBold?.copyWith(color: theme.noColor),
+                                  border: Border(top: BorderSide(color: dividerColor)),
+                                ),
+                                dataCell(
+                                  '-', // saldo total for month doesn't make sense here
+                                  w: colSaldo,
+                                  align: Alignment.centerRight,
+                                  bgColor: totalBg,
+                                  style: monoNumBold,
+                                  border: Border(top: BorderSide(color: dividerColor)),
+                                ),
+                                Container(
+                                  width: colNota,
+                                  height: rowH,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: totalBg,
+                                    border: Border(top: BorderSide(color: dividerColor)),
+                                  ),
+                                  child: const SizedBox.shrink(),
+                                ),
+                                if (isAdmin)
+                                  Container(
+                                    width: colAksi,
+                                    height: rowH,
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(
+                                      color: totalBg,
+                                      border: Border(top: BorderSide(color: dividerColor)),
+                                    ),
+                                    child: const SizedBox.shrink(),
+                                  ),
+                              ],
+                            ),
                           ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
-              ),
+              ],
+            ),
+          ),
+
+          // ✅ Admin-only footer row
+          if (isAdmin) ...[
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TinyIconAction(
+                  icon: Icons.add_circle_outline,
+                  tooltip: 'Tambah transaksi',
+                  color: context.appColors.accent1a,
+                  onPressed: () => onAddTransaksi(),
+                ),
+                TinyIconAction(
+                  icon: Icons.download_outlined,
+                  tooltip: 'Download bulan ini (XLSX/CSV)',
+                  color: context.appColors.accent1a,
+                  onPressed: () => onExportBulan(),
+                ),
+                TinyIconAction(
+                  icon: Icons.upload_file_outlined,
+                  tooltip: 'Upload CSV',
+                  color: context.appColors.accent1a,
+                  onPressed: () => onImportCsv(),
+                ),
+              ],
             ),
           ],
-        ),
+        ],
       ),
     );
   }
