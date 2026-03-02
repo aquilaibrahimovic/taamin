@@ -203,14 +203,25 @@ class _KeuanganPageState extends State<KeuanganPage> {
     };
 
     if (isEdit) {
-      final docId = row.docId;
       await FirebaseFirestore.instance
           .collection('keuangan')
-          .doc(docId)
+          .doc(row.docId)
           .set(payload, SetOptions(merge: true));
     } else {
       await FirebaseFirestore.instance.collection('keuangan').add(payload);
     }
+
+    // ✅ Define the message once
+    final notificationMsg = isEdit
+        ? 'Transaksi $newKet sudah diubah.'
+        : 'Transaksi $newKet sudah ditambahkan.';
+
+// ✅ Use the variable here
+    await FirebaseFirestore.instance.collection('notifications').add({
+      'message': notificationMsg, // <--- Swap the logic for the variable name
+      'timestamp': FieldValue.serverTimestamp(),
+      'type': 'keuangan_update',
+    });
   }
 
   // ---------- Export month ----------
@@ -641,28 +652,16 @@ class _KeuanganPageState extends State<KeuanganPage> {
                                   messenger.showSnackBar(SnackBar(content: Text('Hapus gagal: $e')));
                                 }
                               },
-                              onEditRow: (row) async => _showUpsertTransaksiDialog(row: row),
+                              onEditRow: (row) => _showUpsertTransaksiDialog(row: row),
                               onDeleteRow: (row) async {
-                                final messenger = ScaffoldMessenger.of(context);
                                 try {
                                   await _deleteImageKitIfAny(row.notaFileId);
                                   await FirebaseFirestore.instance.collection('keuangan').doc(row.docId).delete();
-                                } catch (e) {
-                                  if (!mounted) return;
-                                  messenger.showSnackBar(SnackBar(content: Text('Hapus gagal: $e')));
-                                }
+                                } catch (_) {}
                               },
-                              onAddTransaksi: () async => _showUpsertTransaksiDialog(),
-                              onExportBulan: () async => _exportMonthXlsxOrCsv(state.rowsForMonth, state.selectedMonth),
-                              onImportCsv: () async {
-                                final messenger = ScaffoldMessenger.of(context);
-                                try {
-                                  await _importCsvToKeuangan(context);
-                                } catch (e) {
-                                  if (!mounted) return;
-                                  messenger.showSnackBar(SnackBar(content: Text('Import gagal: $e')));
-                                }
-                              },
+                              onAddTransaksi: () => _showUpsertTransaksiDialog(),
+                              onExportBulan: () => _exportMonthXlsxOrCsv(state.rowsForMonth, state.selectedMonth),
+                              onImportCsv: () => _importCsvToKeuangan(context),
                             ),
                           ],
                         );
