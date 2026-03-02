@@ -107,7 +107,9 @@ class FridayTable extends StatelessWidget {
               final agg = fridayAggs[i];
               final bg = rowBg(i);
 
-              final jumatText = agg.exists ? '${i + 1}' : '-';
+              final jumatText = agg.exists && agg.date != null
+                  ? DateFormat('d MMM', 'id_ID').format(agg.date!)
+                  : '-';
               final masukText = agg.exists ? formatRupiah(agg.masuk) : '-';
               final keluarText = agg.exists
                   ? 'Rp. -${NumberFormat.decimalPattern('id_ID').format(agg.keluar)}'

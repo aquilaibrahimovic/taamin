@@ -556,6 +556,13 @@ class _KeuanganPageState extends State<KeuanganPage> {
                             ),
                             const SizedBox(height: 12),
                             const SectionTitle("Transaksi Per Jum'at", level: 2),
+                            Text(
+                              'Dihitung dari Jumat lalu sampai Jumat sekarang.',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: context.appColors.textColor2,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
                             FridayTable(
                               fridayAggs: state.fridayAggs,
                               formatRupiah: state.formatRupiah,

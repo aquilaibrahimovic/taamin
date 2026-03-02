@@ -57,7 +57,7 @@ class KeuHelpers {
       final weekIndex = i + 1;
 
       if (i >= fridays.length) {
-        out.add(const FridayAgg(weekIndex: 0, exists: false, masuk: 0, keluar: 0));
+        out.add(const FridayAgg(weekIndex: 0, exists: false, date: null, masuk: 0, keluar: 0));
         continue;
       }
 
@@ -83,6 +83,7 @@ class KeuHelpers {
       out.add(FridayAgg(
         weekIndex: weekIndex,
         exists: true,
+        date: currentFriday, // Pass the date here
         masuk: totalMasuk,
         keluar: totalKeluar,
       ));

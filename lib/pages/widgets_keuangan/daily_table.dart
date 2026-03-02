@@ -162,6 +162,7 @@ class DailyTable extends StatelessWidget {
           TextStyle? style,
           Color? bgColor,
           BoxBorder? border,
+          bool wrapText = false, // Add this parameter
         }) {
       return Container(
         width: w,
@@ -174,7 +175,10 @@ class DailyTable extends StatelessWidget {
         ),
         child: Text(
           text,
-          overflow: TextOverflow.ellipsis,
+          // Change: Allow text to wrap and limit to 2 lines for the 52px height
+          overflow: wrapText ? TextOverflow.visible : TextOverflow.ellipsis,
+          softWrap: wrapText,
+          maxLines: wrapText ? 2 : 1,
           style: style,
         ),
       );
@@ -234,6 +238,7 @@ class DailyTable extends StatelessWidget {
                           r.keterangan,
                           w: colKet,
                           bgColor: ketBg(i),
+                          wrapText: true,
                         );
                       }),
 

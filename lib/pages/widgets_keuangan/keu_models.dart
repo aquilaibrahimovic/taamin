@@ -1,12 +1,14 @@
 class FridayAgg {
-  final int weekIndex; // 1..5
+  final int weekIndex;
   final bool exists;
+  final DateTime? date; // Add this field
   final int masuk;
   final int keluar;
 
   const FridayAgg({
     required this.weekIndex,
     required this.exists,
+    this.date, // Add to constructor
     required this.masuk,
     required this.keluar,
   });
