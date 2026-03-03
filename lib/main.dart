@@ -1,7 +1,7 @@
+import 'dart:io' show Platform, Directory, File, FileSystemException; // Combined here
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13,13 +13,40 @@ import 'settings.dart';
 import 'firebase_options.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
+// NEW: for joining paths safely across OSes
+import 'package:path/path.dart' as p;
+
 late final SettingsController settingsController;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Load local env vars (DO NOT commit .env)
-  await dotenv.load(fileName: ".env");
+  // On Windows desktop, the working directory can be build\windows\...\Debug,
+  // so we try:
+  // 1) project working directory + .env
+  // 2) next to the executable + .env
+  final candidates = <String>[
+    p.join(Directory.current.path, '.env'),
+    if (!kIsWeb) p.join(File(Platform.resolvedExecutable).parent.path, '.env'),
+  ];
+
+  String? envPath;
+  for (final c in candidates) {
+    if (File(c).existsSync()) {
+      envPath = c;
+      break;
+    }
+  }
+
+  if (envPath == null) {
+    throw FileSystemException(
+      'Could not find .env. Put it in the project root, or copy it next to the exe '
+          '(e.g. build/windows/x64/runner/Debug/.env).',
+    );
+  }
+
+  await dotenv.load(fileName: envPath);
 
   // Initialize Firebase once
   await Firebase.initializeApp(
