@@ -1,3 +1,4 @@
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'dart:io' show Platform;
@@ -17,6 +18,14 @@ late final SettingsController settingsController;
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Load local env vars (DO NOT commit .env)
+  await dotenv.load(fileName: ".env");
+
+  // Initialize Firebase once
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
   // Lock portrait on mobile only
   if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
     await SystemChrome.setPreferredOrientations([
@@ -32,14 +41,11 @@ Future<void> main() async {
     setWindowMinSize(size);
   }
 
-  // ✅ Load stored settings before runApp
+  // Load stored settings before runApp
   final prefs = await SharedPreferences.getInstance();
   final service = SettingsService(prefs);
   settingsController = SettingsController(service);
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
   await initializeDateFormatting('id_ID', null);
 
   runApp(
