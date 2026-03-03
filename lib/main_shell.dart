@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-
+import 'services/notification_service.dart';
 import 'pages/beranda.dart';
 import 'pages/informasi.dart';
 import 'pages/keuangan.dart';
@@ -73,6 +73,10 @@ class _MainShellState extends State<MainShell> {
 
       debugPrint('🔔 Notification received: $msg');
 
+      NotificationService.instance.showLocal(
+        title: 'Keuangan',
+        body: msg,
+      );
       // ✅ Unified style: bottom bar + yesColor + info icon (from showAppSnackBar)
       showAppSnackBar(context, msg, kind: SnackKind.info);
     }, onError: (error) {
