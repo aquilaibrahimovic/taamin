@@ -674,13 +674,31 @@ class _KeuanganPageState extends State<KeuanganPage> {
                               },
                               onEditRow: (row) => _showUpsertTransaksiDialog(row: row),
                               onDeleteRow: (row) async {
+                                final ket = row.keterangan.trim();
+
                                 try {
+                                  // delete nota first (if any)
                                   await _deleteImageKitIfAny(row.notaFileId);
-                                  await FirebaseFirestore.instance
-                                      .collection('keuangan')
-                                      .doc(row.docId)
-                                      .delete();
-                                } catch (_) {}
+
+                                  // delete transaksi
+                                  await FirebaseFirestore.instance.collection('keuangan').doc(row.docId).delete();
+
+                                  // add notification (so MainShell listener shows it)
+                                  final notificationMsg =
+                                  ket.isEmpty ? 'Transaksi sudah dihapus.' : 'Transaksi $ket sudah dihapus.';
+
+                                  await FirebaseFirestore.instance.collection('notifications').add({
+                                    'message': notificationMsg,
+                                    'timestamp': FieldValue.serverTimestamp(),
+                                    'type': 'keuangan_delete',
+                                  });
+
+                                  if (!mounted) return;
+                                  showAppSnackBar(context, notificationMsg, kind: SnackKind.success);
+                                } catch (e) {
+                                  if (!mounted) return;
+                                  showAppSnackBar(context, 'Gagal menghapus: $e', kind: SnackKind.error);
+                                }
                               },
                               onAddTransaksi: () => _showUpsertTransaksiDialog(),
                               onExportBulan: () =>
