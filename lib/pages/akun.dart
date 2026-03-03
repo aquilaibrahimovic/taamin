@@ -150,31 +150,6 @@ class AkunPage extends StatelessWidget {
         InfoCard(
           child: _TextSizeToggle(),
         ),
-        const SizedBox(height: 12),
-        const SectionTitle('Pengaturan'),
-        const InfoCard(
-          child: Column(
-            children: [
-              ListTileMock(
-                icon: Icons.edit,
-                title: 'Ubah Profil',
-                subtitle: 'Nama, kontak, dll (mockup).',
-              ),
-              Divider(),
-              ListTileMock(
-                icon: Icons.lock,
-                title: 'Keamanan',
-                subtitle: 'Ubah PIN / password (mockup).',
-              ),
-              Divider(),
-              ListTileMock(
-                icon: Icons.logout,
-                title: 'Keluar',
-                subtitle: 'Logout akun (mockup).',
-              ),
-            ],
-          ),
-        ),
       ],
     );
   }
