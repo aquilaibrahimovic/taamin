@@ -7,6 +7,7 @@ import 'pages/informasi.dart';
 import 'pages/keuangan.dart';
 import 'pages/inventaris.dart';
 import 'pages/akun.dart';
+import 'widgets/common.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -45,48 +46,35 @@ class _MainShellState extends State<MainShell> {
         .limit(1)
         .snapshots()
         .listen((snapshot) {
+      if (snapshot.docs.isEmpty) return;
 
-      if (snapshot.docs.isNotEmpty) {
-        final doc = snapshot.docs.first;
-        final data = doc.data();
-        final String msg = data['message'] as String? ?? 'Ada pembaruan transaksi.';
-        final Timestamp? ts = data['timestamp'] as Timestamp?;
+      final doc = snapshot.docs.first;
+      final data = doc.data();
 
-        // Logic: Only show if it's a new document ID we haven't handled yet
-        // AND the timestamp is either null (local write) or after the app boot time.
-        bool isNewDoc = _lastShownId != doc.id;
-        bool isRecent = ts == null || ts.toDate().isAfter(_appStartTime);
+      // message could be missing or not a String (defensive)
+      final dynamic rawMsg = data['message'];
+      final String msg = rawMsg is String && rawMsg.trim().isNotEmpty
+          ? rawMsg
+          : 'Ada pembaruan transaksi.';
 
-        if (isNewDoc && isRecent) {
-          // ✅ FIX: Check if the widget is still in the tree before using context
-          if (!mounted) return;
+      final Timestamp? ts = data['timestamp'] as Timestamp?;
 
-          _lastShownId = doc.id;
+      // Only show if it's a new document ID we haven't handled yet
+      // AND the timestamp is either null (local write) or after the app boot time.
+      final bool isNewDoc = _lastShownId != doc.id;
+      final bool isRecent = ts == null || ts.toDate().isAfter(_appStartTime);
 
-          debugPrint('🔔 Notification received: $msg');
+      if (!(isNewDoc && isRecent)) return;
 
-          final messenger = ScaffoldMessenger.of(context);
-          final theme = Theme.of(context);
+      // ✅ Check if the widget is still in the tree before using context
+      if (!mounted) return;
 
-          messenger.clearSnackBars();
-          messenger.showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Icons.notifications_active, color: Colors.white),
-                  const SizedBox(width: 12),
-                  Expanded(child: Text(msg)),
-                ],
-              ),
-              behavior: SnackBarBehavior.floating,
-              backgroundColor: theme.colorScheme.primary,
-              duration: const Duration(seconds: 4),
-              margin: const EdgeInsets.all(16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-          );
-        }
-      }
+      _lastShownId = doc.id;
+
+      debugPrint('🔔 Notification received: $msg');
+
+      // ✅ Unified style: bottom bar + yesColor + info icon (from showAppSnackBar)
+      showAppSnackBar(context, msg, kind: SnackKind.info);
     }, onError: (error) {
       debugPrint('❌ Notification Listener Error: $error');
     });

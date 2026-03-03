@@ -33,8 +33,6 @@ class AkunPage extends StatelessWidget {
                       icon: const Icon(Icons.lock_open),
                       label: const Text('Login Admin'),
                       onPressed: () async {
-                        final messenger = ScaffoldMessenger.of(context);
-
                         final usernameCtrl = TextEditingController();
                         final passCtrl = TextEditingController();
 
@@ -81,9 +79,7 @@ class AkunPage extends StatelessWidget {
                         if (ok != true) return;
 
                         if (username.isEmpty || password.isEmpty) {
-                          messenger.showSnackBar(
-                            const SnackBar(content: Text('Username dan password wajib diisi')),
-                          );
+                          showAppSnackBar(context, 'Username dan password wajib diisi', kind: SnackKind.error);
                           return;
                         }
 
@@ -91,13 +87,11 @@ class AkunPage extends StatelessWidget {
 
                         try {
                           await auth.signInWithEmailAndPassword(email: email, password: password);
-                          messenger.showSnackBar(const SnackBar(content: Text('Login berhasil')));
+                          showAppSnackBar(context, 'Login berhasil', kind: SnackKind.success);
                         } on FirebaseAuthException catch (e) {
-                          messenger.showSnackBar(
-                            SnackBar(content: Text('Login gagal: ${e.code} — ${e.message ?? ""}')),
-                          );
+                          showAppSnackBar(context, 'Login gagal: ...', kind: SnackKind.error);
                         } catch (e) {
-                          messenger.showSnackBar(SnackBar(content: Text('Login gagal: $e')));
+                          showAppSnackBar(context, 'Login gagal: ...', kind: SnackKind.error);
                         }
                       },
                     ),

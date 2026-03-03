@@ -224,21 +224,16 @@ class _KeuanganPageState extends State<KeuanganPage> {
       });
     } catch (e) {
       debugPrint('Error saving transaction/notification: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal menyimpan: $e')),
-        );
-      }
+      if (!mounted) return;
+      showAppSnackBar(context, 'Gagal menyimpan: $e', kind: SnackKind.error);
     }
   }
 
   // ---------- Export month ----------
   Future<void> _exportMonthXlsxOrCsv(
-      List<RowWithSaldo> rowsForMonth, DateTime selectedMonth) async {
-
-    // Capture messenger before async gap
-    final messenger = ScaffoldMessenger.of(context);
-
+      List<RowWithSaldo> rowsForMonth,
+      DateTime selectedMonth,
+      ) async {
     try {
       final filePath = await FilePicker.platform.saveFile(
         dialogTitle: 'Simpan XLSX',
@@ -251,18 +246,36 @@ class _KeuanganPageState extends State<KeuanganPage> {
       final excel = Excel.createExcel();
       final sheet = excel['Transaksi'];
 
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0)).value = TextCellValue('keterangan');
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: 0)).value = TextCellValue('tanggal');
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: 0)).value = TextCellValue('masuk');
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: 0)).value = TextCellValue('keluar');
+      sheet
+          .cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0))
+          .value = TextCellValue('keterangan');
+      sheet
+          .cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: 0))
+          .value = TextCellValue('tanggal');
+      sheet
+          .cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: 0))
+          .value = TextCellValue('masuk');
+      sheet
+          .cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: 0))
+          .value = TextCellValue('keluar');
 
       for (int i = 0; i < rowsForMonth.length; i++) {
         final r = rowsForMonth[i];
         final rowIndex = i + 1;
-        sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: rowIndex)).value = TextCellValue(r.keterangan);
-        sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: rowIndex)).value = TextCellValue(DateFormat('yyyy-MM-dd HH:mm').format(r.tanggal));
-        sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: rowIndex)).value = IntCellValue(r.masuk);
-        sheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: rowIndex)).value = IntCellValue(r.keluar);
+        sheet
+            .cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: rowIndex))
+            .value = TextCellValue(r.keterangan);
+        sheet
+            .cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: rowIndex))
+            .value = TextCellValue(
+          DateFormat('yyyy-MM-dd HH:mm').format(r.tanggal),
+        );
+        sheet
+            .cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: rowIndex))
+            .value = IntCellValue(r.masuk);
+        sheet
+            .cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: rowIndex))
+            .value = IntCellValue(r.keluar);
       }
 
       final bytes = excel.encode();
@@ -271,9 +284,7 @@ class _KeuanganPageState extends State<KeuanganPage> {
       await File(filePath).writeAsBytes(bytes, flush: true);
 
       if (!mounted) return;
-      messenger.showSnackBar(
-        const SnackBar(content: Text('XLSX berhasil disimpan')),
-      );
+      showAppSnackBar(context, 'XLSX berhasil disimpan', kind: SnackKind.success);
       return;
     } catch (_) {
       // fallback to CSV logic below
@@ -301,15 +312,11 @@ class _KeuanganPageState extends State<KeuanganPage> {
     await File(filePath).writeAsString(csvStr, flush: true);
 
     if (!mounted) return;
-    messenger.showSnackBar(
-      const SnackBar(content: Text('CSV berhasil disimpan')),
-    );
+    showAppSnackBar(context, 'CSV berhasil disimpan');
   }
 
   // ---------- Import CSV ----------
   Future<void> _importCsvToKeuangan(BuildContext ctx) async {
-    final messenger = ScaffoldMessenger.of(ctx);
-
     final res = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['csv'],
@@ -321,7 +328,7 @@ class _KeuanganPageState extends State<KeuanganPage> {
     final bytes = res.files.single.bytes;
     if (bytes == null) {
       if (!ctx.mounted) return;
-      messenger.showSnackBar(const SnackBar(content: Text('Gagal membaca file CSV')));
+      showAppSnackBar(ctx, 'Gagal membaca file CSV', kind: SnackKind.error);
       return;
     }
 
@@ -330,7 +337,7 @@ class _KeuanganPageState extends State<KeuanganPage> {
 
     if (parsed.isEmpty) {
       if (!ctx.mounted) return;
-      messenger.showSnackBar(const SnackBar(content: Text('CSV kosong')));
+      showAppSnackBar(ctx, 'CSV kosong', kind: SnackKind.error);
       return;
     }
 
@@ -342,9 +349,7 @@ class _KeuanganPageState extends State<KeuanganPage> {
 
     if ([kKet, kTgl, kMasuk, kKeluar].any((i) => i < 0)) {
       if (!ctx.mounted) return;
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Header CSV harus: keterangan,tanggal,masuk,keluar')),
-      );
+      showAppSnackBar(ctx, 'Header CSV harus: keterangan,tanggal,masuk,keluar', kind: SnackKind.error);
       return;
     }
 
@@ -359,8 +364,14 @@ class _KeuanganPageState extends State<KeuanganPage> {
           'File berisi $rowCount baris. Ini akan MENAMBAH transaksi baru. Lanjutkan?',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dctx, false), child: const Text('Batal')),
-          FilledButton(onPressed: () => Navigator.pop(dctx, true), child: const Text('Import')),
+          TextButton(
+            onPressed: () => Navigator.pop(dctx, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dctx, true),
+            child: const Text('Import'),
+          ),
         ],
       ),
     );
@@ -406,9 +417,7 @@ class _KeuanganPageState extends State<KeuanganPage> {
     await batch.commit();
 
     if (!ctx.mounted) return;
-    messenger.showSnackBar(
-      SnackBar(content: Text('Import selesai: $added transaksi ditambahkan')),
-    );
+    showAppSnackBar(ctx, 'Import selesai: $added transaksi ditambahkan', kind: SnackKind.success);
   }
 
   Future<void> _deleteImageKitIfAny(String fileId) async {
@@ -499,7 +508,8 @@ class _KeuanganPageState extends State<KeuanganPage> {
                     }
 
                     final kasLatest = rowsChrono.isNotEmpty ? rowsChrono.last.saldoKas : 0;
-                    final filteredChrono = rowsChrono.where((r) => KeuHelpers.isInMonth(r.tanggal, _selectedMonth)).toList();
+                    final filteredChrono =
+                    rowsChrono.where((r) => KeuHelpers.isInMonth(r.tanggal, _selectedMonth)).toList();
                     final rowsForMonth = newestFirst ? filteredChrono.reversed.toList() : filteredChrono;
 
                     final totalMasukBulan = filteredChrono.fold<int>(0, (s, r) => s + r.masuk);
@@ -613,7 +623,6 @@ class _KeuanganPageState extends State<KeuanganPage> {
                               selectedMonth: state.selectedMonth,
                               isAdmin: state.isAdmin,
                               onUploadNota: (row) async {
-                                final messenger = ScaffoldMessenger.of(context);
                                 final file = await pickSingleImageFile();
                                 if (file == null) return;
                                 try {
@@ -628,7 +637,8 @@ class _KeuanganPageState extends State<KeuanganPage> {
                                     fileName: fileName,
                                     folder: '/nota',
                                     publicKey: 'public_BiPjyspsiNYuhG3VDz3DLGh1uvs=',
-                                    authEndpoint: 'https://taaminmanage.netlify.app/.netlify/functions/imagekit-auth',
+                                    authEndpoint:
+                                    'https://taaminmanage.netlify.app/.netlify/functions/imagekit-auth',
                                   );
 
                                   await FirebaseFirestore.instance
@@ -642,14 +652,16 @@ class _KeuanganPageState extends State<KeuanganPage> {
                                   }, SetOptions(merge: true));
                                 } catch (e) {
                                   if (!mounted) return;
-                                  messenger.showSnackBar(SnackBar(content: Text('Upload gagal: $e')));
+                                  showAppSnackBar(context, 'Upload gagal: $e', kind: SnackKind.error);
                                 }
                               },
                               onDeleteNota: (row) async {
-                                final messenger = ScaffoldMessenger.of(context);
                                 try {
                                   await _deleteImageKitIfAny(row.notaFileId);
-                                  await FirebaseFirestore.instance.collection('keuangan').doc(row.docId).set({
+                                  await FirebaseFirestore.instance
+                                      .collection('keuangan')
+                                      .doc(row.docId)
+                                      .set({
                                     'notaUrl': '',
                                     'notaFileId': '',
                                     'notaIndex': null,
@@ -657,18 +669,22 @@ class _KeuanganPageState extends State<KeuanganPage> {
                                   }, SetOptions(merge: true));
                                 } catch (e) {
                                   if (!mounted) return;
-                                  messenger.showSnackBar(SnackBar(content: Text('Hapus gagal: $e')));
+                                  showAppSnackBar(context, 'Hapus gagal: $e', kind: SnackKind.error);
                                 }
                               },
                               onEditRow: (row) => _showUpsertTransaksiDialog(row: row),
                               onDeleteRow: (row) async {
                                 try {
                                   await _deleteImageKitIfAny(row.notaFileId);
-                                  await FirebaseFirestore.instance.collection('keuangan').doc(row.docId).delete();
+                                  await FirebaseFirestore.instance
+                                      .collection('keuangan')
+                                      .doc(row.docId)
+                                      .delete();
                                 } catch (_) {}
                               },
                               onAddTransaksi: () => _showUpsertTransaksiDialog(),
-                              onExportBulan: () => _exportMonthXlsxOrCsv(state.rowsForMonth, state.selectedMonth),
+                              onExportBulan: () =>
+                                  _exportMonthXlsxOrCsv(state.rowsForMonth, state.selectedMonth),
                               onImportCsv: () => _importCsvToKeuangan(context),
                             ),
                           ],

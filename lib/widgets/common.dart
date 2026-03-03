@@ -1,4 +1,50 @@
 import 'package:flutter/material.dart';
+import '../app_theme.dart';
+
+enum SnackKind { info, success, error }
+
+void showAppSnackBar(
+    BuildContext context,
+    String message, {
+      SnackKind kind = SnackKind.info,
+      IconData? icon,
+      Duration duration = const Duration(seconds: 4),
+    }) {
+  final messenger = ScaffoldMessenger.of(context);
+
+  final bg = switch (kind) {
+    SnackKind.error => context.appColors.noColor,
+    SnackKind.success => context.appColors.yesColor,
+    SnackKind.info => context.appColors.yesColor, // you can change this later if you add an "infoColor"
+  };
+
+  final defaultIcon = switch (kind) {
+    SnackKind.error => Icons.error_outline,
+    SnackKind.success => Icons.check_circle_outline,
+    SnackKind.info => Icons.info_outline,
+  };
+
+  messenger.clearSnackBars();
+  messenger.showSnackBar(
+    SnackBar(
+      behavior: SnackBarBehavior.fixed,
+      backgroundColor: bg,
+      duration: duration,
+      content: Row(
+        children: [
+          Icon(icon ?? defaultIcon, color: Colors.white),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
 
 class PageScaffold extends StatelessWidget {
   final String title; // you can keep this for now (unused), or remove later

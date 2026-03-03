@@ -32,7 +32,6 @@ class KeuAssetCards extends StatelessWidget {
     required String fieldName,
     required int currentValue,
   }) async {
-    final messenger = ScaffoldMessenger.of(context);
     final controller = TextEditingController(text: currentValue.toString());
 
     final result = await showDialog<int>(
@@ -64,13 +63,18 @@ class KeuAssetCards extends StatelessWidget {
       },
     );
 
+    // Clean up controller after dialog
+    controller.dispose();
+
     if (result == null) return;
 
     try {
       await metaRef.set({fieldName: result}, SetOptions(merge: true));
-      messenger.showSnackBar(SnackBar(content: Text('$title berhasil diperbarui')));
+      if (!context.mounted) return;
+      showAppSnackBar(context, '$title berhasil diperbarui', kind: SnackKind.success);
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Gagal menyimpan: $e')));
+      if (!context.mounted) return;
+      showAppSnackBar(context, 'Gagal menyimpan: $e', kind: SnackKind.error);
     }
   }
 
