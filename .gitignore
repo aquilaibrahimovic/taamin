@@ -43,3 +43,20 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# env files
+.env
+.env.*
+!.env.example
+
+# Firebase / Google config (don’t commit)
+lib/firebase_options.dart
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+
+# common signing/secret files
+android/key.properties
+**/*.jks
+**/*.keystore
+**/*.p12
+**/*.pem
