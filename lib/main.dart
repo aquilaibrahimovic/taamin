@@ -1,4 +1,4 @@
-import 'dart:io' show Platform, Directory, File, FileSystemException; // Combined here
+import 'dart:io' show Platform; // Only Platform is needed now
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -13,40 +13,19 @@ import 'settings.dart';
 import 'firebase_options.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
-// NEW: for joining paths safely across OSes
-import 'package:path/path.dart' as p;
-
+// Late initialization for global access to the settings controller
 late final SettingsController settingsController;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load local env vars (DO NOT commit .env)
-  // On Windows desktop, the working directory can be build\windows\...\Debug,
-  // so we try:
-  // 1) project working directory + .env
-  // 2) next to the executable + .env
-  final candidates = <String>[
-    p.join(Directory.current.path, '.env'),
-    if (!kIsWeb) p.join(File(Platform.resolvedExecutable).parent.path, '.env'),
-  ];
-
-  String? envPath;
-  for (final c in candidates) {
-    if (File(c).existsSync()) {
-      envPath = c;
-      break;
-    }
+  // ✅ Simplified .env loading as an asset
+  // IMPORTANT: You must add the .env file to the 'assets' section of pubspec.yaml
+  try {
+    await dotenv.load(fileName: ".env");
+  } catch (e) {
+    debugPrint("Warning: Could not load .env from assets. Ensure it is listed in pubspec.yaml.");
   }
-
-  if (envPath == null) {
-    throw FileSystemException(
-      'Could not find .env. Put it in the project root, or copy it next to the exe '
-          '(e.g. build/windows/x64/runner/Debug/.env).',
-    );
-  }
-
-  await dotenv.load(fileName: envPath);
 
   // Initialize Firebase once
   await Firebase.initializeApp(
@@ -101,7 +80,7 @@ class MasjidApp extends StatelessWidget {
           themeMode: settings.themeMode,
           home: const MainShell(),
 
-          // ✅ Apply font scaling globally
+          // ✅ Apply font scaling globally based on user settings
           builder: (context, child) {
             final mq = MediaQuery.of(context);
             return MediaQuery(
