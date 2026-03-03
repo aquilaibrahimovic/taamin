@@ -212,7 +212,6 @@ class _KeuanganPageState extends State<KeuanganPage> {
         await FirebaseFirestore.instance.collection('keuangan').add(payload);
       }
 
-      // ✅ Notification logic: Using the variable properly
       final notificationMsg = isEdit
           ? 'Transaksi $newKet sudah diubah.'
           : 'Transaksi $newKet sudah ditambahkan.';
@@ -224,7 +223,7 @@ class _KeuanganPageState extends State<KeuanganPage> {
       });
     } catch (e) {
       debugPrint('Error saving transaction/notification: $e');
-      if (!mounted) return;
+      if (!context.mounted) return; // ✅ Fix
       showAppSnackBar(context, 'Gagal menyimpan: $e', kind: SnackKind.error);
     }
   }
@@ -283,7 +282,7 @@ class _KeuanganPageState extends State<KeuanganPage> {
 
       await File(filePath).writeAsBytes(bytes, flush: true);
 
-      if (!mounted) return;
+      if (!context.mounted) return; // ✅ Fix
       showAppSnackBar(context, 'XLSX berhasil disimpan', kind: SnackKind.success);
       return;
     } catch (_) {
@@ -311,7 +310,7 @@ class _KeuanganPageState extends State<KeuanganPage> {
     final csvStr = toCsv(rows);
     await File(filePath).writeAsString(csvStr, flush: true);
 
-    if (!mounted) return;
+    if (!context.mounted) return; // ✅ Fix
     showAppSnackBar(context, 'CSV berhasil disimpan');
   }
 
@@ -377,6 +376,8 @@ class _KeuanganPageState extends State<KeuanganPage> {
     );
     if (ok != true) return;
 
+    if (!ctx.mounted) return; // ✅ Fix after dialog gap
+
     final col = FirebaseFirestore.instance.collection('keuangan');
     final batch = FirebaseFirestore.instance.batch();
     final maxIndex = [kKet, kTgl, kMasuk, kKeluar].reduce((a, b) => a > b ? a : b);
@@ -416,7 +417,7 @@ class _KeuanganPageState extends State<KeuanganPage> {
 
     await batch.commit();
 
-    if (!ctx.mounted) return;
+    if (!ctx.mounted) return; // ✅ Fix
     showAppSnackBar(ctx, 'Import selesai: $added transaksi ditambahkan', kind: SnackKind.success);
   }
 
@@ -651,7 +652,7 @@ class _KeuanganPageState extends State<KeuanganPage> {
                                     'notaFileName': fileName,
                                   }, SetOptions(merge: true));
                                 } catch (e) {
-                                  if (!mounted) return;
+                                  if (!context.mounted) return; // ✅ Fix
                                   showAppSnackBar(context, 'Upload gagal: $e', kind: SnackKind.error);
                                 }
                               },
@@ -668,7 +669,7 @@ class _KeuanganPageState extends State<KeuanganPage> {
                                     'notaFileName': '',
                                   }, SetOptions(merge: true));
                                 } catch (e) {
-                                  if (!mounted) return;
+                                  if (!context.mounted) return; // ✅ Fix
                                   showAppSnackBar(context, 'Hapus gagal: $e', kind: SnackKind.error);
                                 }
                               },
@@ -693,10 +694,10 @@ class _KeuanganPageState extends State<KeuanganPage> {
                                     'type': 'keuangan_delete',
                                   });
 
-                                  if (!mounted) return;
+                                  if (!context.mounted) return; // ✅ Fix
                                   showAppSnackBar(context, notificationMsg, kind: SnackKind.success);
                                 } catch (e) {
-                                  if (!mounted) return;
+                                  if (!context.mounted) return; // ✅ Fix
                                   showAppSnackBar(context, 'Gagal menghapus: $e', kind: SnackKind.error);
                                 }
                               },
